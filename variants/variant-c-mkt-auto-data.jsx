@@ -24,13 +24,13 @@ const AU_GROUP_ORDER = ['예약','대기/시술','고객 관리','시술/판매'
 // timing: { kind:'select', options:[...] } | { kind:'reserve', time:[...], date:[...] } | { kind:'rules' }
 const AU_ALIMTALK = [
   { id:'al-rsv', group:'예약', name:'예약 안내', event:'예약 등록 시', on:true,
-    timing:{ kind:'select', options:['예약 등록 즉시'] }, code:'KK_RSV_001', button:'예약 확인하기',
+    timing:{ kind:'select', options:['예약 등록 즉시'] }, code:'KK_RSV_001',
     body:'[#{매장명}] 예약 안내\n\n#{고객명} 고객님, 예약이 확정되었습니다.\n\n▶ 예약일시 : #{예약일시}\n▶ 예약메뉴 : #{예약메뉴}\n▶ 담당자 : #{담당자명}\n\n예약 변경은 아래 번호로 연락 주세요.\n☎ #{매장전화번호}' },
   { id:'al-rsv-des', group:'예약', name:'예약 안내(디자이너)', event:'예약 등록 시', on:false, recipient:'designer',
     timing:{ kind:'select', options:['예약 등록 즉시'] }, code:'KK_RSV_002',
     body:'[예약 알림]\n#{담당자명}님, 새 예약이 등록되었습니다.\n\n▶ 고객명 : #{고객명}\n▶ 예약일시 : #{예약일시}\n▶ 예약메뉴 : #{예약메뉴}' },
   { id:'al-rsv-remind', group:'예약', name:'예약일 확인', event:'예약일 전', on:false,
-    timing:{ kind:'select', options:['예약 전날 오후 6시','예약 전날 오전 10시','예약 3시간 전','예약 1시간 전'] }, code:'KK_RSV_003', button:'예약 확인하기',
+    timing:{ kind:'select', options:['예약 전날 오후 6시','예약 전날 오전 10시','예약 3시간 전','예약 1시간 전'] }, code:'KK_RSV_003',
     body:'#{고객명} 고객님, 내일 예약 잊지 않으셨죠?\n\n▶ 예약일시 : #{예약일시}\n▶ 담당자 : #{담당자명}\n\n변경이 필요하시면 미리 연락 부탁드립니다.\n☎ #{매장전화번호}' },
   { id:'al-wait', group:'대기/시술', name:'대기 접수', event:'대기 등록 시', on:false,
     timing:{ kind:'select', options:['대기 등록 즉시'] }, code:'KK_WT_001',

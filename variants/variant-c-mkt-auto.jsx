@@ -339,8 +339,7 @@ function AuAlimtalkForm({ item, patch }) {
         </>
       )}
 
-      <AuRow title="템플릿" desc="카카오 검수를 통과한 문구만 보낼 수 있어요. 내용을 바꾸려면 수정 요청 후 재검수(1~2영업일)가 필요해요."
-        right={<button style={{...c_ghostBtnSm, fontFamily:'inherit', whiteSpace:'nowrap'}}>수정 요청</button>}>
+      <AuRow title="템플릿" desc="카카오 검수를 통과한 문구만 보낼 수 있어요. 내용을 바꾸려면 수정 요청 후 재검수(1~2영업일)가 필요해요.">
         <div style={{border:`1px solid ${C_BORDER}`, borderRadius:8, overflow:'hidden'}}>
           <div style={{display:'flex', alignItems:'center', gap:8, padding:'8px 12px', background:'#FBFCFE', borderBottom:`1px solid ${C_BORDER}`}}>
             <span style={{fontSize:11, fontFamily:'ui-monospace, Menlo, monospace', color:C_MUTED}}>{item.code}</span>
