@@ -40,8 +40,7 @@ function C_CustomerRegisterModal({ onClose }) {
   const [tags, setTags] = React.useState([]);
   const [tagInput, setTagInput] = React.useState('');
   const [memo, setMemo] = React.useState('');
-  const [notifyMkt, setNotifyMkt] = React.useState(false);
-  const [notifySurvey, setNotifySurvey] = React.useState(false);
+  const [notifyMsg, setNotifyMsg] = React.useState(true);
 
   const toggleTag = (label) => {
     setTags(prev => prev.includes(label) ? prev.filter(x => x !== label) : [...prev, label]);
@@ -235,18 +234,11 @@ function C_CustomerRegisterModal({ onClose }) {
               }}/>
           </C_Field>
 
-          {/* 알림 수신 동의 */}
-          <C_Field label="알림 수신 동의">
-            <div style={{display:'flex', gap:14}}>
-              <label style={c_check}>
-                <input type="checkbox" checked={notifyMkt} onChange={e => setNotifyMkt(e.target.checked)}/>
-                <span>마케팅 알림 (예약 리마인더, 프로모션 SMS)</span>
-              </label>
-              <label style={c_check}>
-                <input type="checkbox" checked={notifySurvey} onChange={e => setNotifySurvey(e.target.checked)}/>
-                <span>만족도 설문</span>
-              </label>
-            </div>
+          <C_Field label="문자, 알림톡 수신동의">
+            <label style={c_check}>
+              <input type="checkbox" checked={notifyMsg} onChange={e => setNotifyMsg(e.target.checked)}/>
+              <span>문자, 알림톡 수신동의</span>
+            </label>
           </C_Field>
         </div>
 

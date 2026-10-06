@@ -432,6 +432,7 @@ function C_SalesPage({ target, onClose }) {
   const [memo, setMemo] = React.useState('');
   const [memoOpen, setMemoOpen] = React.useState(false);
   const [settled, setSettled] = React.useState(false);
+  const [sendSms, setSendSms] = React.useState(true);
 
   const ASSET = (!isGuest && window.CUSTOMER_ASSETS && window.CUSTOMER_ASSETS[customer.name]) || { membership:0, tickets:[] };
   const MEMBERSHIP_BAL_INIT = ASSET.membership;
@@ -590,6 +591,11 @@ function C_SalesPage({ target, onClose }) {
             }}>
               <IconCheck size={13}/> {stage === 'service' ? '시술중' : '시술 시작'}
             </button>
+            {settled && (
+              <button onClick={() => setSettled(false)} title="닫기" style={sl_iconBtn}>
+                <IconX size={16}/>
+              </button>
+            )}
           </div>
         </div>
 
@@ -889,8 +895,14 @@ function C_SalesPage({ target, onClose }) {
                 border:`1.5px solid ${C_BLUE}`, boxShadow:'0 8px 24px rgba(30,64,175,0.14)',
               }}>
                 {/* ① 받을 금액 (가장 크게) */}
-                <div style={{padding:'10px 18px', display:'flex', alignItems:'center', borderBottom:`1px solid ${C_BORDER}`}}>
+                <div style={{padding:'10px 18px', display:'flex', alignItems:'center', gap:8, borderBottom:`1px solid ${C_BORDER}`}}>
                   <span style={{...sl_title, fontSize:14}}>결제 요약</span>
+                  <div style={{flex:1}}/>
+                  <label style={{display:'inline-flex', alignItems:'center', gap:6, fontSize:12, fontWeight:700, color:C_INK, cursor:'pointer', whiteSpace:'nowrap'}}>
+                    <input type="checkbox" checked={sendSms} onChange={e => setSendSms(e.target.checked)}
+                      style={{width:15, height:15, accentColor:C_BLUE, margin:0}}/>
+                    문자 발송
+                  </label>
                 </div>
                 <div style={{background:C_BLUE, color:'#fff', padding:'14px 18px 14px'}}>
                   <div style={{fontSize:12, fontWeight:700, opacity:0.85}}>받을 금액</div>
@@ -1840,7 +1852,7 @@ function SL_RefundOption({ on, onClick, color, title, sub, disabled }) {
 
 // ─── 고객 정보 수정 ───
 function SL_CustomerEditModal({ cust, onSave, onClose }) {
-  const [f, setF] = React.useState({ ...cust, tags:[...(cust.tags || [])] });
+  const [f, setF] = React.useState({ ...cust, tags:[...(cust.tags || [])], sms: cust.sms !== false });
   const set = (k, v) => setF(prev => ({ ...prev, [k]: v }));
   const designers = DESIGNERS.filter(d => d.id !== 'unassigned').slice(0, 10);
   const row = (label, node) => (
@@ -1900,6 +1912,11 @@ function SL_CustomerEditModal({ cust, onSave, onClose }) {
             <textarea value={f.memo || ''} onChange={e => set('memo', e.target.value.slice(0, 200))} rows={3}
               placeholder="알러지, 선호 스타일 등" style={{...sl_input, height:'auto', padding:'8px 10px', resize:'none', lineHeight:1.5}}/>
           </div>
+          <label style={{display:'flex', alignItems:'center', gap:8, fontSize:13, fontWeight:700, color:C_INK, cursor:'pointer'}}>
+            <input type="checkbox" checked={f.sms !== false} onChange={e => set('sms', e.target.checked)}
+              style={{width:16, height:16, accentColor:C_BLUE, margin:0}}/>
+            문자 발송
+          </label>
         </div>
         <div style={sl_modalFoot}>
           <button onClick={onClose} style={sl_ghostBtn}>취소</button>
