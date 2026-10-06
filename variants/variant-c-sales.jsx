@@ -431,6 +431,7 @@ function C_SalesPage({ target, onClose }) {
   const [coupon, setCoupon] = React.useState('none');
   const [memo, setMemo] = React.useState('');
   const [memoOpen, setMemoOpen] = React.useState(false);
+  const [settled, setSettled] = React.useState(false);
 
   const ASSET = (!isGuest && window.CUSTOMER_ASSETS && window.CUSTOMER_ASSETS[customer.name]) || { membership:0, tickets:[] };
   const MEMBERSHIP_BAL_INIT = ASSET.membership;
@@ -498,9 +499,20 @@ function C_SalesPage({ target, onClose }) {
   const ready = items.length > 0 && remaining === 0;
 
   return (
-    <div style={{
+    <div style={settled ? {
+      position:'fixed', inset:0, zIndex:230, background:'rgba(11,20,37,0.45)',
+      display:'flex', alignItems:'center', justifyContent:'center', padding:20,
+    } : {
       width:948, flexShrink:0, height:'100%', background:C_BG,
-      overflow:'auto', fontFamily:'inherit', boxSizing:'border-box',
+      fontFamily:'inherit', boxSizing:'border-box',
+    }}>
+    <div style={{
+      width: settled ? 948 : '100%',
+      maxWidth: settled ? '96vw' : 'none',
+      height: settled ? '92vh' : '100%',
+      background:C_BG, overflow:'auto', fontFamily:'inherit', boxSizing:'border-box',
+      borderRadius: settled ? 16 : 0,
+      boxShadow: settled ? '0 24px 64px rgba(11,20,37,0.28)' : 'none',
     }}>
       <div style={{padding:'12px 14px 16px', display:'flex', flexDirection:'column', gap:10}}>
         {/* ── 헤더 ── */}
@@ -642,7 +654,7 @@ function C_SalesPage({ target, onClose }) {
                   value={TICKETS.length ? TICKETS.map(t => `${t.name} ${ticketRemain(t.id)}회`).join(' · ') : '없음'} color={SL_TEAL}/>
               </div>
 
-              {/* 최근 방문 5회 */}
+              {!settled && (
               <div style={sl_card}>
                 <div style={{padding:'8px 12px 8px 14px', display:'flex', alignItems:'center', gap:8, borderBottom:`1px solid ${C_BORDER}`}}>
                   <span style={{...sl_title, whiteSpace:'nowrap'}}>상세 내역</span>
@@ -662,6 +674,7 @@ function C_SalesPage({ target, onClose }) {
                 </div>
                 <SL_DetailTable cat={assetTab} limit={5}/>
               </div>
+              )}
               </>)}
 
               {/* 판매 항목 */}
@@ -950,7 +963,22 @@ function C_SalesPage({ target, onClose }) {
 
                 {/* ⑤ 버튼 */}
                 <div style={{padding:'12px 14px 14px', display:'flex', flexDirection:'column', gap:6}}>
-                  <button disabled={!ready} onClick={() => window.__toast && window.__toast('결제가 완료되었습니다')} style={{
+                  {settled ? (<>
+                    <button onClick={() => window.__toast && window.__toast('매출이 수정되었습니다')} style={{
+                      padding:'12px', borderRadius:12, border:'none', fontFamily:'inherit',
+                      fontSize:14, fontWeight:800, background:C_BLUE, color:'#fff', cursor:'pointer',
+                    }}>매출 수정</button>
+                    <button onClick={() => { window.__toast && window.__toast('매출이 삭제되었습니다'); onClose(); }} style={{
+                      padding:'12px', borderRadius:12, border:'none', fontFamily:'inherit',
+                      fontSize:14, fontWeight:800, background:'#DC2626', color:'#fff', cursor:'pointer',
+                    }}>매출 삭제</button>
+                    <button onClick={() => window.__toast && window.__toast('영수증을 출력합니다')} style={{
+                      padding:'12px', borderRadius:12, fontFamily:'inherit', cursor:'pointer',
+                      fontSize:14, fontWeight:800, background:C_SURFACE, color:C_INK,
+                      border:`1.5px solid ${C_BORDER}`,
+                    }}>영수증 출력</button>
+                  </>) : (<>
+                  <button disabled={!ready} onClick={() => setSettled(true)} style={{
                     padding:'14px', borderRadius:12, border:'none', fontFamily:'inherit',
                     fontSize:16, fontWeight:800, letterSpacing:'-0.01em',
                     background: ready ? C_BLUE : '#E5EAF2',
@@ -968,6 +996,7 @@ function C_SalesPage({ target, onClose }) {
                   }}>
                     단말기 결제 입력
                   </button>
+                  </>)}
                 </div>
               </div>
             </div>
@@ -1000,6 +1029,7 @@ function C_SalesPage({ target, onClose }) {
           setRefundOpen(false);
         }}
         onClose={() => setRefundOpen(false)}/>}
+    </div>
     </div>
   );
 }
