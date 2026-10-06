@@ -424,6 +424,8 @@ function C_SalesPage({ target, onClose }) {
   const [assetTab, setAssetTab] = React.useState('service'); // SL_DETAIL_CATS id
   const [installment, setInstallment] = React.useState('일시불');
   const [deduct, setDeduct] = React.useState({ membership:0, point:0, extra:0 });
+  const [extraMode, setExtraMode] = React.useState('won');
+  const [extraPct, setExtraPct] = React.useState(0);
   // 예약금: 예약 등록 시 입력된 금액을 불러와 자동 차감 (네이버 연동 전 수기)
   const savedDeposit = !isGuest && window.BOOKING_DEPOSITS ? window.BOOKING_DEPOSITS[customer.name] : null;
   const [deposit, setDeposit] = React.useState(() => savedDeposit ? { ...savedDeposit, on:true } : { amount:0, channel:'naver', on:false });
@@ -456,7 +458,11 @@ function C_SalesPage({ target, onClose }) {
   const ticketCount = items.filter(it => it.ticketId).length;
   const couponBase = Math.max(0, subtotal - lineDiscount - ticketAmt);
   const couponAmt = 0;
-  const totalDiscount = lineDiscount + couponAmt + deduct.extra;
+  const extraBase = couponBase;
+  const extraWon = extraMode === 'pct'
+    ? Math.min(extraBase, Math.round(extraBase * Math.min(100, extraPct) / 100))
+    : Math.min(extraBase, deduct.extra);
+  const totalDiscount = lineDiscount + couponAmt + extraWon;
   const depositAmt = deposit.on ? Math.min(deposit.amount, Math.max(0, subtotal - ticketAmt - totalDiscount)) : 0;
   const afterDiscount = Math.max(0, subtotal - ticketAmt - totalDiscount - depositAmt);
   const payable = Math.max(0, afterDiscount - deduct.membership - deduct.point);
@@ -881,8 +887,14 @@ function C_SalesPage({ target, onClose }) {
                       onFill={() => setDeduct(d => ({...d, point: Math.max(0, Math.min(POINT_BAL, afterDiscount - d.membership))}))}
                       fillLabel="전액"/>
                     </>)}
-                    <SL_PayRow label="전체할인" hint="결제 전체" value={deduct.extra} max={subtotal}
-                      onChange={v => setDeduct(d => ({...d, extra:v}))}/>
+                    <SL_ExtraDiscount
+                      base={extraBase}
+                      mode={extraMode}
+                      amount={extraMode === 'pct' ? extraWon : deduct.extra}
+                      pct={extraPct}
+                      onAmount={v => { setExtraMode('won'); setExtraPct(0); setDeduct(d => ({ ...d, extra:v })); }}
+                      onPct={v => { setExtraMode(v > 0 ? 'pct' : 'won'); setExtraPct(v); setDeduct(d => ({ ...d, extra:0 })); }}
+                    />
                   </div>
                 </div>
               </div>
@@ -1105,6 +1117,63 @@ function SL_MoneyInput({ value, onChange, max, small, disabled }) {
         onBlur={e => e.target.style.borderColor = C_BORDER}
       />
       {!small && <span style={{position:'absolute', right:8, top:'50%', transform:'translateY(-50%)', fontSize:11, color:C_MUTED}}>원</span>}
+    </div>
+  );
+}
+
+function SL_ExtraDiscount({ base, mode, amount, pct, onAmount, onPct }) {
+  const presets = [10, 20, 30, 50];
+  const pctOn = mode === 'pct' && pct > 0;
+  const chip = (on) => ({
+    flex:'1 1 0', height:28, padding:0, borderRadius:7, cursor:'pointer', fontFamily:'inherit',
+    border:`1px solid ${on ? C_BLUE : C_BORDER}`,
+    background: on ? C_BLUE : C_SURFACE,
+    color: on ? '#fff' : C_INK,
+    fontSize:11, fontWeight:800,
+  });
+  return (
+    <div style={{display:'flex', flexDirection:'column', gap:6, marginTop:2}}>
+      <div style={{display:'flex', alignItems:'baseline', gap:6}}>
+        <span style={sl_label}>전체할인</span>
+        <span style={{fontSize:9.5, color:C_MUTED}}>결제 전체</span>
+      </div>
+      <div style={{display:'grid', gridTemplateColumns:'32px minmax(0,1fr)', gap:6, alignItems:'center'}}>
+        <span style={{fontSize:11, fontWeight:800, color: mode === 'won' && amount > 0 ? C_INK : C_MUTED}}>금액</span>
+        <SL_MoneyInput value={amount} max={base} onChange={onAmount}/>
+      </div>
+      <div style={{display:'grid', gridTemplateColumns:'32px minmax(0,1fr)', gap:6, alignItems:'center'}}>
+        <span style={{fontSize:11, fontWeight:800, color: pctOn ? C_BLUE : C_MUTED}}>%</span>
+        <div style={{display:'flex', gap:4, alignItems:'center', minWidth:0}}>
+          {presets.map(p => {
+            const on = mode === 'pct' && pct === p;
+            return (
+              <button key={p} type="button" onClick={() => onPct(on ? 0 : p)} style={chip(on)}>{p}%</button>
+            );
+          })}
+          <div style={{position:'relative', width:54, flexShrink:0}}>
+            <input
+              value={pctOn ? String(pct) : ''}
+              inputMode="numeric"
+              placeholder="직접"
+              onChange={e => {
+                let v = parseInt(String(e.target.value).replace(/\D/g, '') || '0', 10);
+                if (v > 100) v = 100;
+                onPct(v);
+              }}
+              style={{
+                width:'100%', height:28, padding:'0 16px 0 6px', boxSizing:'border-box',
+                border:`1px solid ${pctOn && !presets.includes(pct) ? C_BLUE : C_BORDER}`,
+                borderRadius:7, textAlign:'right', fontSize:12, fontWeight:800,
+                color:C_INK, background:C_SURFACE, outline:'none', fontFamily:'inherit',
+                fontVariantNumeric:'tabular-nums',
+              }}
+              onFocus={e => { e.target.style.borderColor = C_BLUE; }}
+              onBlur={e => { e.target.style.borderColor = pctOn && !presets.includes(pct) ? C_BLUE : C_BORDER; }}
+            />
+            <span style={{position:'absolute', right:5, top:'50%', transform:'translateY(-50%)', fontSize:10, fontWeight:700, color:C_MUTED, pointerEvents:'none'}}>%</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
