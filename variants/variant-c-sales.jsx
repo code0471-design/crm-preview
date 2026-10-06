@@ -430,7 +430,6 @@ function C_SalesPage({ target, onClose }) {
   const [depositEdit, setDepositEdit] = React.useState(false);
   const [coupon, setCoupon] = React.useState('none');
   const [memo, setMemo] = React.useState('');
-  const [done, setDone] = React.useState(false);
   const [memoOpen, setMemoOpen] = React.useState(false);
 
   const ASSET = (!isGuest && window.CUSTOMER_ASSETS && window.CUSTOMER_ASSETS[customer.name]) || { membership:0, tickets:[] };
@@ -582,31 +581,7 @@ function C_SalesPage({ target, onClose }) {
           </div>
         </div>
 
-        {tab === 'sales' && done && (
-          <SL_PayResult
-            customerName={displayName}
-            items={items}
-            lineAmt={lineAmt}
-            payable={payable}
-            totalDiscount={totalDiscount}
-            depositAmt={depositAmt}
-            deposit={deposit}
-            ticketAmt={ticketAmt}
-            ticketCount={ticketCount}
-            deduct={deduct}
-            payMap={payMap}
-            installment={installment}
-            payDate={payDate}
-            memo={memo}
-            onEdit={() => setDone(false)}
-            onClose={() => {
-              if (!isGuest && window.BOOKING_DEPOSITS) delete window.BOOKING_DEPOSITS[customer.name];
-              onClose();
-            }}
-          />
-        )}
-
-        {tab === 'sales' && !done && (
+        {tab === 'sales' && (
           <div style={{display:'grid', gridTemplateColumns:'minmax(0, 1fr) 268px', gap:10, alignItems:'start'}}>
             {/* ── 좌측 ── */}
             <div style={{display:'flex', flexDirection:'column', gap:10, minWidth:0}}>
@@ -975,7 +950,7 @@ function C_SalesPage({ target, onClose }) {
 
                 {/* ⑤ 버튼 */}
                 <div style={{padding:'12px 14px 14px', display:'flex', flexDirection:'column', gap:6}}>
-                  <button disabled={!ready} onClick={() => setDone(true)} style={{
+                  <button disabled={!ready} onClick={() => window.__toast && window.__toast('결제가 완료되었습니다')} style={{
                     padding:'14px', borderRadius:12, border:'none', fontFamily:'inherit',
                     fontSize:16, fontWeight:800, letterSpacing:'-0.01em',
                     background: ready ? C_BLUE : '#E5EAF2',
@@ -1374,131 +1349,6 @@ function SL_HistoryModal({ customer, onClose }) {
         <div style={{overflowY:'auto'}}>
           {SL_HISTORY.map((r, i) => <SL_HistoryRow key={i} r={r} last={i === SL_HISTORY.length - 1}/>)}
         </div>
-      </div>
-    </div>
-  );
-}
-
-function SL_fmtWhen(v) {
-  if (!v) return '';
-  const [d, t] = String(v).split('T');
-  if (!t) return d;
-  const [hh, mm] = t.split(':');
-  const h = Number(hh);
-  const ap = h < 12 ? '오전' : '오후';
-  const h12 = h % 12 || 12;
-  return `${d.replace(/-/g, '.')} ${ap} ${String(h12).padStart(2, '0')}:${mm || '00'}`;
-}
-
-// ─── 결제 완료 내용 ───
-function SL_PayResult({
-  customerName, items, lineAmt, payable, totalDiscount,
-  depositAmt, deposit, ticketAmt, ticketCount, deduct, payMap, installment,
-  payDate, memo, onEdit, onClose,
-}) {
-  const names = Object.fromEntries(SL_METHODS.map(m => [m.id, m.full]));
-  const used = Object.entries(payMap).filter(([, v]) => v > 0);
-  const discounts = [];
-  items.forEach(it => {
-    const off = lineAmt(it);
-    if (off > 0) discounts.push({ name: it.name, amount: off });
-  });
-  const cuts = [
-    depositAmt > 0 ? { label:`예약금 (${SL_DEPOSIT_CH[deposit.channel] || '예약금'})`, v:depositAmt, c:'#03A94D' } : null,
-    ticketCount > 0 ? { label:`티켓 ${ticketCount}회`, v:ticketAmt, c:SL_TEAL } : null,
-    deduct.membership > 0 ? { label:'정액권', v:deduct.membership, c:'#7C3AED' } : null,
-    deduct.point > 0 ? { label:'포인트', v:deduct.point, c:'#059669' } : null,
-  ].filter(Boolean);
-  const sec = { fontSize:12, fontWeight:800, color:C_INK, letterSpacing:'-0.01em', margin:'0 0 8px' };
-  return (
-    <div style={{...sl_card, padding:'16px 18px 14px'}}>
-      <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:16}}>
-        <div style={{width:28, height:28, borderRadius:'50%', background:'#D1FAE5', color:'#059669', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0}}>
-          <IconCheck size={15}/>
-        </div>
-        <div style={{fontSize:15, fontWeight:800, color:C_INK, letterSpacing:'-0.02em'}}>결제 완료</div>
-        <div style={{fontSize:12.5, color:C_MUTED}}>{customerName}님</div>
-        <div style={{flex:1}}/>
-        <div style={{fontSize:12.5, color:C_MUTED, fontWeight:700}}>{SL_fmtWhen(payDate)}</div>
-        <div style={{fontSize:20, fontWeight:800, color:C_BLUE, fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em'}}>{SL_won(payable)}원</div>
-      </div>
-      <div style={{display:'grid', gridTemplateColumns:'minmax(0, 1.15fr) minmax(280px, 0.85fr)', gap:22}}>
-        <div>
-          <div style={sec}>시술 메뉴</div>
-          {items.length === 0 ? (
-            <div style={{fontSize:12.5, color:C_MUTED}}>없음</div>
-          ) : items.map(it => {
-            const designer = (typeof DESIGNERS !== 'undefined' ? DESIGNERS : []).find(d => d.id === it.designer);
-            const off = lineAmt(it);
-            return (
-              <div key={it.key} style={{display:'flex', alignItems:'center', gap:8, padding:'6px 0', borderBottom:`1px solid ${C_BORDER}`}}>
-                <div style={{flex:1, minWidth:0}}>
-                  <div style={{fontSize:13, fontWeight:800, color:C_INK, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{it.name}</div>
-                  <div style={{fontSize:11, color:C_MUTED, marginTop:1}}>{designer ? designer.name : '담당 미지정'}</div>
-                </div>
-                <span style={{fontSize:13, fontWeight:800, color: it.ticketId ? SL_TEAL : C_INK, fontVariantNumeric:'tabular-nums', flexShrink:0}}>
-                  {it.ticketId ? '티켓' : `${SL_won(Math.max(0, it.price - off))}원`}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-        <div style={{display:'flex', flexDirection:'column', gap:14}}>
-          <div>
-          <div style={sec}>할인</div>
-          {discounts.length === 0 ? (
-            <div style={{fontSize:12.5, color:C_MUTED}}>없음</div>
-          ) : discounts.map((d, i) => (
-            <div key={i} style={{display:'flex', justifyContent:'space-between', gap:8, padding:'3px 0', fontSize:13}}>
-              <span style={{color:C_INK, fontWeight:700, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{d.name}</span>
-              <span style={{color:'#DC2626', fontWeight:800, fontVariantNumeric:'tabular-nums', flexShrink:0}}>−{SL_won(d.amount)}원</span>
-            </div>
-          ))}
-          {totalDiscount > 0 && discounts.length > 1 && (
-            <div style={{display:'flex', justifyContent:'space-between', padding:'4px 0 0', fontSize:12, color:C_MUTED}}>
-              <span>할인 합계</span><span style={{fontWeight:800, color:'#DC2626'}}>−{SL_won(totalDiscount)}원</span>
-            </div>
-          )}
-
-          </div>
-          <div>
-          <div style={sec}>차감</div>
-          {cuts.length === 0 ? (
-            <div style={{fontSize:12.5, color:C_MUTED}}>없음</div>
-          ) : cuts.map(r => (
-            <div key={r.label} style={{display:'flex', justifyContent:'space-between', gap:8, padding:'3px 0', fontSize:13}}>
-              <span style={{color:C_INK, fontWeight:700}}>{r.label}</span>
-              <span style={{color:r.c, fontWeight:800, fontVariantNumeric:'tabular-nums'}}>−{SL_won(r.v)}원</span>
-            </div>
-          ))}
-
-          </div>
-          <div>
-          <div style={sec}>결제수단</div>
-          {used.length === 0 ? (
-            <div style={{fontSize:12.5, color:C_MUTED}}>없음</div>
-          ) : used.map(([k, v]) => (
-            <div key={k} style={{display:'flex', justifyContent:'space-between', gap:8, padding:'3px 0', fontSize:13}}>
-              <span style={{color:C_INK, fontWeight:700}}>{k === 'card' && installment && installment !== '일시불' ? `카드 (${installment})` : (names[k] || k)}</span>
-              <span style={{fontWeight:800, fontVariantNumeric:'tabular-nums', color:C_INK}}>{SL_won(v)}원</span>
-            </div>
-          ))}
-
-          </div>
-          {memo ? (
-            <div>
-              <div style={sec}>메모</div>
-              <div style={{fontSize:12.5, color:C_INK, lineHeight:1.5}}>{memo}</div>
-            </div>
-          ) : null}
-        </div>
-      </div>
-      <div style={{display:'flex', justifyContent:'flex-end', gap:8, marginTop:16, paddingTop:12, borderTop:`1px solid ${C_BORDER}`}}>
-        <button onClick={onEdit} style={{...sl_ghostBtn, height:38, padding:'0 14px', fontSize:13}}>매출 수정</button>
-        <button onClick={onClose} style={{
-          height:38, padding:'0 18px', border:'none', borderRadius:8, background:C_BLUE, color:'#fff',
-          fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:'inherit',
-        }}>확인</button>
       </div>
     </div>
   );
