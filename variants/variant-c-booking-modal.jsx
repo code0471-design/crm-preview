@@ -8,6 +8,26 @@ const {
 function C_BookingAddModal({ onClose, initialCustomer }) {
   const [customer, setCustomer] = React.useState(initialCustomer || CUSTOMERS[0]);
   const [showCustomerPicker, setShowCustomerPicker] = React.useState(false);
+  const [guestOpen, setGuestOpen] = React.useState(false);
+  const [guestName, setGuestName] = React.useState('');
+  const openGuest = () => { setGuestName(''); setGuestOpen(true); };
+  const applyGuest = (name) => {
+    const trimmed = (name || '').trim();
+    setCustomer({
+      id: 'guest-' + Date.now(),
+      name: trimmed,
+      phone: '',
+      tags: ['비회원'],
+      lastVisit: '-',
+      totalVisits: 0,
+      mainDesigner: null,
+      memo: '',
+      guest: true,
+    });
+    setGuestOpen(false);
+  };
+  const shownName = customer.guest && !customer.name ? '비회원' : customer.name;
+  const avatarChar = (customer.name || '비').charAt(0);
 
   const [date, setDate] = React.useState({y: 2026, m: 9, d: 21});
   const [designerId, setDesignerId] = React.useState('moon');
@@ -72,25 +92,42 @@ function C_BookingAddModal({ onClose, initialCustomer }) {
           >
             <div style={{
               width:26, height:26, borderRadius:'50%',
-              background: C_BLUE, color:'#fff',
+              background: customer.guest ? '#94A3B8' : C_BLUE, color:'#fff',
               display:'flex', alignItems:'center', justifyContent:'center',
               fontSize:11, fontWeight:800, flexShrink:0,
-            }}>{customer.name.charAt(0)}</div>
+            }}>{avatarChar}</div>
             <div style={{flex:1, minWidth:0, textAlign:'left'}}>
               <div style={{display:'flex', alignItems:'center', gap:5}}>
-                <span style={{fontSize:13.5, fontWeight:800, color:C_INK, letterSpacing:'-0.01em'}}>{customer.name}</span>
+                <span style={{fontSize:13.5, fontWeight:800, color:C_INK, letterSpacing:'-0.01em'}}>{shownName}</span>
                 {customer.tags[0] && (
                   <span style={{
                     fontSize:10, fontWeight:700, padding:'1px 7px', borderRadius:8,
-                    background: customer.tags[0]==='VIP' ? '#FEF3C7' : customer.tags[0]==='단골' ? '#DBEAFE' : '#F1F5F9',
+                    background: customer.tags[0]==='VIP' ? '#FEF3C7' : customer.tags[0]==='단골' ? '#DBEAFE' : customer.tags[0]==='비회원' ? '#F1F5F9' : '#F1F5F9',
                     color: customer.tags[0]==='VIP' ? '#B45309' : customer.tags[0]==='단골' ? C_BLUE : C_MUTED,
                   }}>{customer.tags[0]}</span>
                 )}
-                <span style={{fontSize:11, color:C_MUTED, fontVariantNumeric:'tabular-nums'}}>{customer.phone}</span>
-                <span style={{fontSize:11, color:C_MUTED}}>· 방문 {customer.totalVisits}회</span>
+                {customer.phone && (
+                  <span style={{fontSize:11, color:C_MUTED, fontVariantNumeric:'tabular-nums'}}>{customer.phone}</span>
+                )}
+                {!customer.guest && (
+                  <span style={{fontSize:11, color:C_MUTED}}>· 방문 {customer.totalVisits}회</span>
+                )}
               </div>
             </div>
             <IconSearch size={13} style={{color:C_MUTED, flexShrink:0}}/>
+          </button>
+          <button onClick={openGuest} style={{
+            display:'inline-flex', alignItems:'center', gap:6, flexShrink:0,
+            height:42, padding:'0 14px',
+            background:C_SURFACE, color:C_INK,
+            border:`1.5px solid ${C_BORDER}`, borderRadius:12,
+            fontSize:12.5, fontWeight:800, cursor:'pointer', fontFamily:'inherit',
+            whiteSpace:'nowrap', letterSpacing:'-0.01em',
+          }}
+          onMouseEnter={e => e.currentTarget.style.borderColor = C_BLUE}
+          onMouseLeave={e => e.currentTarget.style.borderColor = C_BORDER}
+          >
+            <IconUser size={13}/> 비회원 예약 등록
           </button>
 
           <div style={{flex:1}}/>
@@ -192,6 +229,14 @@ function C_BookingAddModal({ onClose, initialCustomer }) {
           current={customer}
           onSelect={(c) => { setCustomer(c); setShowCustomerPicker(false); }}
           onClose={() => setShowCustomerPicker(false)}
+        />
+      )}
+      {guestOpen && (
+        <BK_GuestNameDialog
+          name={guestName}
+          setName={setGuestName}
+          onApply={applyGuest}
+          onClose={() => setGuestOpen(false)}
         />
       )}
     </div>
@@ -579,8 +624,15 @@ function BK_LivePreview({ customer, date, time, dow, designerIds, services, tota
           {/* 고객 */}
           <PVKV label="고객">
             <div style={{display:'flex', alignItems:'center', gap:6}}>
-              <span style={{fontSize:14, fontWeight:800, color:C_INK, letterSpacing:'-0.01em'}}>{customer.name}</span>
-              <span style={{fontSize:11.5, color:C_MUTED, fontVariantNumeric:'tabular-nums'}}>· {customer.phone}</span>
+              <span style={{fontSize:14, fontWeight:800, color:C_INK, letterSpacing:'-0.01em'}}>
+                {customer.guest && !customer.name ? '비회원' : customer.name}
+              </span>
+              {customer.phone && (
+                <span style={{fontSize:11.5, color:C_MUTED, fontVariantNumeric:'tabular-nums'}}>· {customer.phone}</span>
+              )}
+              {customer.guest && (
+                <span style={{fontSize:10, fontWeight:700, padding:'1px 7px', borderRadius:8, background:'#F1F5F9', color:C_MUTED}}>비회원</span>
+              )}
             </div>
           </PVKV>
 
@@ -731,10 +783,14 @@ function BK_LivePreview({ customer, date, time, dow, designerIds, services, tota
       }}>
         <div style={{display:'flex', alignItems:'baseline', gap:6, marginBottom:10}}>
           <span style={{fontSize:12, fontWeight:800, color:C_INK, letterSpacing:'-0.01em'}}>최근 방문</span>
-          <span style={{fontSize:10.5, color:C_MUTED}}>{customer.name}님</span>
+          <span style={{fontSize:10.5, color:C_MUTED}}>{(customer.guest && !customer.name ? '비회원' : customer.name)}님</span>
         </div>
         <div style={{flex:1, overflow:'auto', display:'flex', flexDirection:'column', gap:6}}>
-          {[
+          {customer.guest ? (
+            <div style={{padding:'18px 8px', textAlign:'center', color:C_MUTED, fontSize:12, fontWeight:600}}>
+              방문 이력이 없습니다
+            </div>
+          ) : [
             { date:'2026-09-11', menu:'루트터치업', designer:'문지윤', price:70000 },
             { date:'2026-08-22', menu:'헤어스파 + 뿌리염색', designer:'문지윤', price:130000 },
           ].map((h, i) => (
@@ -775,6 +831,62 @@ function PVPlaceholder({ children }) {
       background:'#F1F5F9', color:'#94A3B8',
       fontSize:11.5, fontWeight:600,
     }}>{children}</span>
+  );
+}
+
+// ─── 비회원 이름 입력 ───
+function BK_GuestNameDialog({ name, setName, onApply, onClose }) {
+  const trimmed = name.trim();
+  return (
+    <div onClick={(e) => { e.stopPropagation(); onClose(); }} style={{
+      position:'fixed', inset:0, background:'rgba(11,20,37,0.5)',
+      zIndex:240, display:'flex', alignItems:'center', justifyContent:'center', padding:20,
+    }}>
+      <div onClick={e => e.stopPropagation()} style={{
+        width:420, background:C_SURFACE, borderRadius:16,
+        boxShadow:'0 24px 64px rgba(11,20,37,0.28)',
+        padding:'18px 22px 20px',
+      }}>
+        <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:6}}>
+          <div style={{fontSize:16, fontWeight:800, color:C_INK, letterSpacing:'-0.02em', flex:1}}>비회원 예약</div>
+          <button onClick={onClose} style={{
+            width:28, height:28, borderRadius:8, border:'none',
+            background:C_BG, color:C_INK, cursor:'pointer',
+            display:'flex', alignItems:'center', justifyContent:'center',
+          }}><IconX size={15}/></button>
+        </div>
+        <div style={{fontSize:12.5, color:C_MUTED, lineHeight:1.5, marginBottom:14}}>
+          이름을 알고 있으면 입력하세요. 없으면 이름 없이 진행할 수 있습니다.
+        </div>
+        <input value={name} onChange={e => setName(e.target.value)}
+          placeholder="이름"
+          autoFocus
+          onKeyDown={e => { if (e.key === 'Enter' && trimmed) onApply(trimmed); }}
+          style={{
+            width:'100%', height:42, padding:'0 14px',
+            border:`1.5px solid ${C_BORDER}`, borderRadius:12,
+            fontSize:14, fontWeight:700, background:C_BG, outline:'none',
+            fontFamily:'inherit', boxSizing:'border-box', color:C_INK,
+          }}
+          onFocus={e => e.target.style.borderColor = C_BLUE}
+          onBlur={e => e.target.style.borderColor = C_BORDER}
+        />
+        <button onClick={() => trimmed && onApply(trimmed)} disabled={!trimmed} style={{
+          width:'100%', marginTop:10, height:42,
+          border:'none', borderRadius:12,
+          background: trimmed ? C_BLUE : '#E5EAF2',
+          color: trimmed ? '#fff' : '#94A3B8',
+          fontSize:13.5, fontWeight:800, cursor: trimmed ? 'pointer' : 'default',
+          fontFamily:'inherit',
+        }}>이 이름으로 진행</button>
+        <button onClick={() => onApply('')} style={{
+          width:'100%', marginTop:8, height:42,
+          background:C_SURFACE, color:C_INK,
+          border:`1.5px solid ${C_BORDER}`, borderRadius:12,
+          fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:'inherit',
+        }}>이름 없이 비회원으로 진행</button>
+      </div>
+    </div>
   );
 }
 
