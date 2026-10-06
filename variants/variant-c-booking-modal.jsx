@@ -951,34 +951,12 @@ function C_CustomerPickerPopover({ current, onSelect, onClose }) {
                 <div style={{fontSize:14, fontWeight:700, color:C_INK, letterSpacing:'-0.01em'}}>고객을 검색해주세요</div>
                 <div style={{fontSize:12, color:C_MUTED, marginTop:4}}>이름 일부 또는 전화번호 뒷자리를 입력하세요</div>
               </div>
-
-              {/* 빠른 액션 */}
-              <div style={{display:'flex', gap:6, marginTop:6}}>
-                <button style={c_pickerQuickBtn}>
-                  <IconUser size={12}/> 비회원으로 진행
-                </button>
-                <button style={{
-                  ...c_pickerQuickBtn,
-                  background: C_BLUE, color:'#fff', border:'none',
-                }}>
-                  <IconPlus size={12}/> 신규 고객 등록
-                </button>
-              </div>
             </div>
           ) : filtered.length === 0 ? (
             <div style={{
               padding:'40px 20px', textAlign:'center', color:C_MUTED, fontSize:13,
             }}>
-              '<strong style={{color:C_INK}}>{search}</strong>' 와 일치하는 고객이 없어요.<br/>
-              <button style={{
-                marginTop:12,
-                padding:'8px 16px', background:C_BLUE, color:'#fff',
-                border:'none', borderRadius:20, fontSize:12, fontWeight:700,
-                cursor:'pointer', fontFamily:'inherit',
-                display:'inline-flex', alignItems:'center', gap:5,
-              }}>
-                <IconPlus size={12}/> 신규 등록
-              </button>
+              '<strong style={{color:C_INK}}>{search}</strong>' 와 일치하는 고객이 없어요.
             </div>
           ) : (
             filtered.map(c => {
@@ -1031,15 +1009,6 @@ const c_bkNav = {
   border:`1px solid ${C_BORDER}`, background:C_SURFACE,
   color:C_INK, cursor:'pointer',
   display:'inline-flex', alignItems:'center', justifyContent:'center',
-};
-
-const c_pickerQuickBtn = {
-  padding:'8px 14px',
-  background:C_SURFACE, color:C_INK,
-  border:`1.5px solid ${C_BORDER}`, borderRadius:20,
-  fontSize:12, fontWeight:700, cursor:'pointer',
-  fontFamily:'inherit',
-  display:'inline-flex', alignItems:'center', gap:5,
 };
 
 window.C_BookingAddModal = C_BookingAddModal;
