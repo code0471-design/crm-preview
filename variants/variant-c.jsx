@@ -2377,6 +2377,7 @@ function VariantC() {
   const [page, setPage] = React.useState(() => localStorage.getItem('crm-c-page') || 'booking');
   React.useEffect(() => { localStorage.setItem('crm-c-page', page); }, [page]);
   const [modal, setModal] = React.useState(null); // 'customer-register' | 'guest-sales' | 'booking-add' | null
+  const [bookingSeed, setBookingSeed] = React.useState(null);
   const CustomerRegModal = window.C_CustomerRegisterModal;
   const GuestSalesModal = window.C_GuestSalesModal;
   const BookingAddModal = window.C_BookingAddModal;
@@ -2386,7 +2387,7 @@ function VariantC() {
   const SalesPage = window.C_SalesPage;
   // 하위 페이지에서 모달을 열 수 있게 window로 노출
   React.useEffect(() => {
-    window.__openBookingModal = () => setModal('booking-add');
+    window.__openBookingModal = (customer) => { setBookingSeed(customer || null); setModal('booking-add'); };
     window.__openSales = (t) => setSalesTarget(t);
     window.__openCustomerRegister = () => setModal('customer-register');
     window.__goPage = (pg) => { setSalesTarget(null); setPage(pg); };
@@ -2482,7 +2483,7 @@ function VariantC() {
         <GuestSalesModal onClose={() => setModal(null)}/>
       )}
       {modal === 'booking-add' && BookingAddModal && (
-        <BookingAddModal onClose={() => setModal(null)}/>
+        <BookingAddModal initialCustomer={bookingSeed} onClose={() => { setModal(null); setBookingSeed(null); }}/>
       )}
     </div>
   );

@@ -564,6 +564,9 @@ function C_SalesPage({ target, onClose }) {
           </div>
 
           <div style={{display:'flex', gap:6, flexShrink:0}}>
+            <button onClick={() => window.__openBookingModal && window.__openBookingModal(isGuest ? null : cust)} style={sl_ghostBtn}>
+              <IconPlus size={13}/> 예약등록
+            </button>
             <button onClick={() => setStage(stage === 'waiting' ? null : 'waiting')} style={{
               ...sl_ghostBtn,
               ...(stage === 'waiting' ? { background:'#FFFBEB', borderColor:'#F59E0B', color:'#B45309' } : {}),
