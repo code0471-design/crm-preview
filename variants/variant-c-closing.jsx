@@ -386,13 +386,12 @@ function C_DesignerClosingCard({ id, d, designer, spot }) {
                 {new Intl.NumberFormat('ko-KR').format(fee)}
               </span>
             </span>
+          </div>
+          <div style={{marginTop:3}}>
             <span style={{
-              fontSize:10, fontWeight:600, color, background:`${color}22`,
+              fontSize:10.5, fontWeight:700, color, background:`${color}22`,
               padding:'1px 6px', borderRadius:8, letterSpacing:'-0.01em',
             }}>{designer?.role}</span>
-          </div>
-          <div style={{fontSize:10.5, color:C_MUTED, marginTop:2, fontVariantNumeric:'tabular-nums'}}>
-            {d.rows.length}건 결제{(d.useLines||[]).length ? ` · 소진 ${(d.useLines||[]).length}` : ''}
           </div>
         </div>
         <div style={{textAlign:'right', flexShrink:0}}>
