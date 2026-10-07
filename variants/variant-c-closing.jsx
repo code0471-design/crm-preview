@@ -5,10 +5,92 @@ const {
   c_iconBtnSm, c_ghostBtnSm,
 } = window;
 
+const CLOSING_BASE_DAY = '2026-09-11';
+const CLOSING_APP_TODAY = '2026-09-21';
+
+function closingShift(iso, delta) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + delta);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${dt.getFullYear()}-${p(dt.getMonth() + 1)}-${p(dt.getDate())}`;
+}
+function closingLabel(iso) {
+  const [y, m, d] = iso.split('-');
+  return `${y}년 ${m}월 ${d}일`;
+}
+function closingSubNet(d) {
+  return (d.useLines || []).filter(u => u.sub).reduce((s, u) => s + (u.fee || 0), 0);
+}
+function closingPaid(r) { return r.amount || 0; }
+function closingRowFee(r, settle) {
+  if (r.kind === 'prepaid' || r.kind === 'ticket') return settle === 'use' ? 0 : (r.amount || 0);
+  return r.amount || 0;
+}
+function closingGross(d) {
+  return d.rows.reduce((a, r) => a + closingPaid(r), 0);
+}
+function closingFee(d) {
+  const settle = d.settle || 'sale';
+  const fromRows = d.rows.reduce((a, r) => a + closingRowFee(r, settle), 0);
+  const fromUse = (d.useLines || []).reduce((s, l) => s + (l.fee || 0), 0);
+  return fromRows + fromUse + (d.help || 0);
+}
+function closingReal(d) { return closingFee(d); }
+// 해당 날짜 마감. 판매 정산이면 소진은 0원, 소진 정산이면 소진액이 시술자 수수료 대상.
+function closingBook(iso, rows, settle) {
+  const mode = settle === 'use' ? 'use' : 'sale';
+  const map = {};
+  const put = (id, name) => {
+    if (!map[id]) {
+      const base = iso === CLOSING_BASE_DAY ? CLOSING_TODAY[id] : null;
+      map[id] = base
+        ? { name: base.name, rows: base.rows, ticket: base.ticket || 0, coupon: base.coupon || 0, help: base.help || 0, subLines: [], useLines: [], settle: mode }
+        : { name, rows: [], ticket: 0, coupon: 0, help: 0, subLines: [], useLines: [], settle: mode };
+    }
+    return map[id];
+  };
+  if (iso === CLOSING_BASE_DAY) {
+    Object.entries(CLOSING_TODAY).forEach(([id, d]) => put(id, d.name));
+  }
+  (rows || []).filter(r => r.date === iso).forEach(r => {
+    const perf = DESIGNERS.find(x => x.name === r.performer);
+    const seller = DESIGNERS.find(x => x.name === r.seller);
+    const tag = r.kind === 'ticket' ? '티켓소진' : '정액권소진';
+    const transferred = mode === 'sale' && r.done && r.seller !== r.performer;
+    const give = transferred ? (r.give || 0) : 0;
+    put(perf ? perf.id : r.performer, r.performer).useLines.push({
+      time: r.time, customer: r.customer, menu: r.menu, tag,
+      paid: 0,
+      saleAmount: r.amount || 0,
+      fee: mode === 'use' ? (r.amount || 0) : (transferred ? give : 0),
+      done: !!r.done,
+      sub: transferred,
+    });
+    if (transferred) {
+      put(seller ? seller.id : r.seller, r.seller).useLines.push({
+        time: r.time, customer: r.customer, menu: r.menu, tag,
+        paid: 0,
+        saleAmount: r.amount || 0,
+        fee: -give,
+        done: true,
+        sub: true,
+      });
+    }
+  });
+  return map;
+}
+
 function C_ClosingPage() {
   const [tab, setTab] = React.useState('sales');    // sales | internal | meta
   const [layout, setLayout] = React.useState('cards'); // cards | summary | list-detail
   const [selectedDesigner, setSelectedDesigner] = React.useState('moon');
+  const [day, setDay] = React.useState(CLOSING_BASE_DAY);
+  const [pin, setPin] = React.useState(null);
+  const [hover, setHover] = React.useState(null);
+  const spot = hover || pin;
+  const toggleSpot = (id) => setPin(cur => cur === id ? null : id);
+  const handoff = window.useSubHandoff ? window.useSubHandoff() : null;
+  const book = closingBook(day, handoff ? handoff.rows : [], handoff ? handoff.settle : 'sale');
 
   return (
     <div style={{flex:1, display:'flex', flexDirection:'column', minWidth:0, overflow:'hidden', background:C_BG}}>
@@ -16,6 +98,7 @@ function C_ClosingPage() {
         <C_ClosingSubHeader
           tab={tab} setTab={setTab}
           layout={layout} setLayout={setLayout}
+          day={day} setDay={setDay}
         />
         <div style={{flex:1, overflow:'auto', padding:'16px 20px 24px'}}>
           {/* 브레드크럼 */}
@@ -28,8 +111,10 @@ function C_ClosingPage() {
             </span>
           </div>
 
+          {window.C_SettlePicker && <div style={{marginBottom:14}}><window.C_SettlePicker/></div>}
+
           {/* KPI 스트립 */}
-          <C_ClosingKPIs tab={tab}/>
+          <C_ClosingKPIs book={book} spot={spot} onHover={setHover} onToggle={toggleSpot}/>
 
           {/* 범례 */}
           <C_ClosingLegend tab={tab}/>
@@ -37,10 +122,15 @@ function C_ClosingPage() {
           {/* 탭별 본문 */}
           {tab === 'sales' && (
             <>
-              {layout === 'cards' && <C_SalesCards/>}
-              {layout === 'summary' && <C_SalesSummary/>}
+              {Object.keys(book).length === 0 && (
+                <div style={{padding:'48px 16px', textAlign:'center', fontSize:13, color:C_MUTED, background:C_SURFACE, border:`1px solid ${C_BORDER}`, borderRadius:12}}>
+                  이 날짜에 마감할 매출이 없어요.
+                </div>
+              )}
+              {layout === 'cards' && <C_SalesCards book={book} spot={spot}/>}
+              {layout === 'summary' && <C_SalesSummary book={book}/>}
               {layout === 'list-detail' && (
-                <C_SalesListDetail selected={selectedDesigner} onSelect={setSelectedDesigner}/>
+                <C_SalesListDetail book={book} spot={spot} selected={selectedDesigner} onSelect={setSelectedDesigner}/>
               )}
             </>
           )}
@@ -53,7 +143,7 @@ function C_ClosingPage() {
 }
 
 // ─ 서브헤더 ─
-function C_ClosingSubHeader({ tab, setTab, layout, setLayout }) {
+function C_ClosingSubHeader({ tab, setTab, layout, setLayout, day, setDay }) {
   return (
     <div style={{
       display:'flex', alignItems:'center', gap:8,
@@ -61,16 +151,16 @@ function C_ClosingSubHeader({ tab, setTab, layout, setLayout }) {
     }}>
       {/* 날짜 네비 */}
       <div style={{display:'flex', alignItems:'center', gap:6, flexShrink:0}}>
-        <button style={c_iconBtnSm}><IconChevronL size={14}/></button>
+        <button onClick={() => setDay(closingShift(day, -1))} style={c_iconBtnSm}><IconChevronL size={14}/></button>
         <div style={{
-          fontSize:15, fontWeight:700, color:C_INK, minWidth:130, textAlign:'center',
+          fontSize:15, fontWeight:700, color:C_INK, minWidth:148, textAlign:'center',
           fontVariantNumeric:'tabular-nums', letterSpacing:'-0.01em',
           display:'flex', alignItems:'center', justifyContent:'center', gap:5,
         }}>
-          2026년 09월 11일 <IconChevronD size={11} style={{color:C_MUTED}}/>
+          {closingLabel(day)}
         </div>
-        <button style={c_iconBtnSm}><IconChevronR size={14}/></button>
-        <button style={{...c_ghostBtnSm, marginLeft:2}}>오늘</button>
+        <button onClick={() => setDay(closingShift(day, 1))} style={c_iconBtnSm}><IconChevronR size={14}/></button>
+        <button onClick={() => setDay(CLOSING_APP_TODAY)} style={{...c_ghostBtnSm, marginLeft:2}}>오늘</button>
       </div>
 
       <div style={{flex:1}}/>
@@ -127,49 +217,87 @@ function C_ClosingSubHeader({ tab, setTab, layout, setLayout }) {
 }
 
 // ─ 통계 계산 유틸 ─
-function calcClosingTotals() {
+function calcClosingTotals(book) {
   const totals = {
-    revenue: 0, count: 0, cash: 0, card: 0, mix: 0,
-    ticket: 0, coupon: 0, help: 0,
-    channels: { road:0, online:0, intro:0, revisit:0, replace:0 },
+    revenue: 0, count: 0, cash: 0, card: 0, mix: 0, fresh: 0, returning: 0,
   };
-  Object.values(CLOSING_TODAY).forEach(d => {
+  Object.values(book || {}).forEach(d => {
     d.rows.forEach(r => {
       totals.revenue += r.amount;
       totals.count += 1;
-      totals[r.pay] += r.amount;
-      totals.channels[r.channel] += 1;
+      if (r.pay === 'cash' || r.pay === 'card' || r.pay === 'mix') totals[r.pay] += r.amount;
+      if (r.channel === 'revisit' || r.channel === 'replace') totals.returning += 1;
+      else totals.fresh += 1;
     });
-    totals.ticket += d.ticket || 0;
-    totals.coupon += d.coupon || 0;
-    totals.help += d.help || 0;
   });
   return totals;
 }
 
 // ─ KPI 스트립 ─
-function C_ClosingKPIs({ tab }) {
-  const t = calcClosingTotals();
-  const avgTicket = t.count > 0 ? Math.round(t.revenue / t.count) : 0;
+function closingSpotOn(row, spot) {
+  if (!spot || !row) return false;
+  if (spot === 'card') return row.pay === 'card';
+  if (spot === 'cash') return row.pay === 'cash';
+  if (spot === 'fresh') return row.channel !== 'revisit' && row.channel !== 'replace';
+  if (spot === 'returning') return row.channel === 'revisit' || row.channel === 'replace';
+  return false;
+}
+function closingSpotStyle(on) {
+  if (on === true) return { background:'#FEF08A', boxShadow:'inset 4px 0 0 #D97706', opacity:1 };
+  if (on === false) return { opacity:0.22 };
+  return {};
+}
 
-  const salesKpis = [
-    { label:'총 매출',   value:`₩ ${new Intl.NumberFormat('ko-KR').format(t.revenue)}`, sub:`${t.count}건 결제`,  accent:C_INK, icon:<IconTrend/>, tint:'#EFF3FC', iconColor:C_BLUE },
-    { label:'객수',      value:`${t.count}명`, sub:`재방문 ${t.channels.revisit}명`, accent:C_INK, icon:<IconUser/>, tint:'#F0FDF4', iconColor:'#059669' },
-    { label:'객단가',    value:`₩ ${new Intl.NumberFormat('ko-KR').format(avgTicket)}`, sub:'완료 기준 평균', accent:C_INK, icon:<IconChart/>, tint:'#F5F3FF', iconColor:'#7C3AED' },
-    { label:'카드 비율', value:`${Math.round(t.card/t.revenue*100)}%`, sub:`₩ ${new Intl.NumberFormat('ko-KR').format(t.card)}`, accent:C_INK, icon:<IconTag/>, tint:'#FEF3C7', iconColor:'#D97706' },
+function C_ClosingKPIs({ book, spot, onHover, onToggle }) {
+  const t = calcClosingTotals(book);
+  const won = (n) => new Intl.NumberFormat('ko-KR').format(n || 0);
+  const money = [
+    { id:null, label:'총 고객 결제액', value:`₩ ${won(t.revenue)}`, sub: t.mix ? `현금+카드 ${won(t.mix)} 포함` : `${t.count}건`, tint:'#EFF3FC', iconColor:C_BLUE, icon:<IconTrend/> },
+    { id:'card', label:'카드합계', value:`₩ ${won(t.card)}`, sub:'카드 결제 · 클릭하면 고정', tint:'#EFF6FF', iconColor:'#2563EB', icon:<IconTag/> },
+    { id:'cash', label:'현금합계', value:`₩ ${won(t.cash)}`, sub:'현금 결제 · 클릭하면 고정', tint:'#F0FDF4', iconColor:'#059669', icon:<IconChart/> },
   ];
+  const guest = (
+      <div style={{background:C_SURFACE, padding:'14px 16px', borderRadius:10, border:`1px solid ${C_BORDER}`}}>
+        <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:8}}>
+          <div style={{fontSize:11.5, color:C_MUTED, fontWeight:500}}>객수</div>
+          <div style={{width:26, height:26, borderRadius:6, background:'#F0FDF4', color:'#059669', display:'flex', alignItems:'center', justifyContent:'center'}}>
+            <IconUser size={14}/>
+          </div>
+        </div>
+        <div style={{fontSize:20, fontWeight:700, color:C_INK, fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em', lineHeight:1.1}}>{t.count}명</div>
+        <div style={{display:'flex', gap:8, marginTop:8}}>
+          <span onMouseEnter={() => onHover('fresh')} onMouseLeave={() => onHover(null)} onClick={() => onToggle('fresh')} style={{fontSize:12, fontWeight:700, color:'#1D4ED8', background: spot === 'fresh' ? '#FEF08A' : '#EFF6FF', borderRadius:8, padding:'3px 8px', cursor:'pointer', boxShadow: spot === 'fresh' ? 'inset 0 0 0 1.5px #D97706' : 'none'}}>신규 {t.fresh}</span>
+          <span onMouseEnter={() => onHover('returning')} onMouseLeave={() => onHover(null)} onClick={() => onToggle('returning')} style={{fontSize:12, fontWeight:700, color:'#6D28D9', background: spot === 'returning' ? '#FEF08A' : '#F5F3FF', borderRadius:8, padding:'3px 8px', cursor:'pointer', boxShadow: spot === 'returning' ? 'inset 0 0 0 1.5px #D97706' : 'none'}}>기존 {t.returning}</span>
+        </div>
+      </div>
+  );
 
   return (
-    <div style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:12, marginBottom:14}}>
-      {salesKpis.map((k, i) => (
-        <div key={i} style={{background:C_SURFACE, padding:'14px 16px', borderRadius:10, border:`1px solid ${C_BORDER}`}}>
+    <div style={{display:'grid', gridTemplateColumns:'1.15fr 0.95fr 1fr 1fr', gap:12, marginBottom:14}}>
+      {money.slice(0, 1).map(k => (
+        <div key={k.label} style={{background:C_SURFACE, padding:'14px 16px', borderRadius:10, border:`1px solid ${C_BORDER}`}}>
           <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:10}}>
             <div style={{fontSize:11.5, color:C_MUTED, fontWeight:500}}>{k.label}</div>
             <div style={{width:26, height:26, borderRadius:6, background:k.tint, color:k.iconColor, display:'flex', alignItems:'center', justifyContent:'center'}}>
               {React.cloneElement(k.icon, { size:14 })}
             </div>
           </div>
-          <div style={{fontSize:20, fontWeight:700, color:k.accent, fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em', lineHeight:1.1}}>{k.value}</div>
+          <div style={{fontSize:20, fontWeight:700, color:C_INK, fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em', lineHeight:1.1}}>{k.value}</div>
+          <div style={{fontSize:11, color:C_MUTED, marginTop:5}}>{k.sub}</div>
+        </div>
+      ))}
+      {guest}
+      {money.slice(1).map(k => (
+        <div key={k.label}
+          onMouseEnter={() => onHover(k.id)} onMouseLeave={() => onHover(null)} onClick={() => onToggle(k.id)}
+          style={{background: spot === k.id ? '#FFFBEB' : C_SURFACE, padding:'14px 16px', borderRadius:10, border:`1px solid ${spot === k.id ? '#F59E0B' : C_BORDER}`, cursor:'pointer'}}>
+          <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', marginBottom:10}}>
+            <div style={{fontSize:11.5, color:C_MUTED, fontWeight:500}}>{k.label}</div>
+            <div style={{width:26, height:26, borderRadius:6, background:k.tint, color:k.iconColor, display:'flex', alignItems:'center', justifyContent:'center'}}>
+              {React.cloneElement(k.icon, { size:14 })}
+            </div>
+          </div>
+          <div style={{fontSize:20, fontWeight:700, color:C_INK, fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em', lineHeight:1.1}}>{k.value}</div>
           <div style={{fontSize:11, color:C_MUTED, marginTop:5}}>{k.sub}</div>
         </div>
       ))}
@@ -205,24 +333,25 @@ function C_ClosingLegend({ tab }) {
 }
 
 // ─ 매출 마감: 디자이너 카드 세로 나열 (기본) ─
-function C_SalesCards() {
+function C_SalesCards({ book, spot }) {
+  if (!Object.keys(book).length) return null;
   return (
     <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:16}}>
-      {Object.entries(CLOSING_TODAY).map(([id, d]) => {
+      {Object.entries(book).map(([id, d]) => {
         const designer = DESIGNERS.find(x => x.id === id);
-        return <C_DesignerClosingCard key={id} id={id} d={d} designer={designer}/>;
+        return <C_DesignerClosingCard key={id} id={id} d={d} designer={designer} spot={spot}/>;
       })}
     </div>
   );
 }
 
-function C_DesignerClosingCard({ id, d, designer }) {
+function C_DesignerClosingCard({ id, d, designer, spot }) {
   const rowTotal = d.rows.reduce((a, r) => a + r.amount, 0);
   const cashTotal = d.rows.filter(r => r.pay === 'cash').reduce((a,r) => a+r.amount, 0);
   const cardTotal = d.rows.filter(r => r.pay === 'card').reduce((a,r) => a+r.amount, 0);
   const mixTotal  = d.rows.filter(r => r.pay === 'mix').reduce((a,r) => a+r.amount, 0);
-  const discount = d.coupon || 0;
-  const realTotal = rowTotal + (d.ticket||0) - discount + (d.help||0);
+  const gross = closingGross(d);
+  const fee = closingFee(d);
   const color = designer?.color || '#94A3B8';
   const initials = d.name.charAt(0);
 
@@ -251,19 +380,25 @@ function C_DesignerClosingCard({ id, d, designer }) {
         <div style={{flex:1, minWidth:0}}>
           <div style={{display:'flex', alignItems:'center', gap:6}}>
             <div style={{fontSize:14, fontWeight:700, color:C_INK, letterSpacing:'-0.01em'}}>{d.name}</div>
+            <span style={{display:'inline-flex', alignItems:'baseline', gap:4, fontVariantNumeric:'tabular-nums'}}>
+              <span style={{fontSize:10, fontWeight:700, color:C_MUTED}}>수수료 대상</span>
+              <span style={{fontSize:13, fontWeight:800, color: fee < 0 ? '#DC2626' : C_BLUE, letterSpacing:'-0.02em'}}>
+                {new Intl.NumberFormat('ko-KR').format(fee)}
+              </span>
+            </span>
             <span style={{
               fontSize:10, fontWeight:600, color, background:`${color}22`,
               padding:'1px 6px', borderRadius:8, letterSpacing:'-0.01em',
             }}>{designer?.role}</span>
           </div>
           <div style={{fontSize:10.5, color:C_MUTED, marginTop:2, fontVariantNumeric:'tabular-nums'}}>
-            {d.rows.length}건 결제 완료
+            {d.rows.length}건 결제{(d.useLines||[]).length ? ` · 소진 ${(d.useLines||[]).length}` : ''}
           </div>
         </div>
         <div style={{textAlign:'right', flexShrink:0}}>
-          <div style={{fontSize:10, color:C_MUTED, fontWeight:600, letterSpacing:'0.02em'}}>실 매출</div>
+          <div style={{fontSize:10, color:C_MUTED, fontWeight:600, letterSpacing:'0.02em'}}>총 고객 결제액</div>
           <div style={{fontSize:16, fontWeight:700, color:C_INK, fontVariantNumeric:'tabular-nums', letterSpacing:'-0.02em', lineHeight:1.15}}>
-            ₩ {new Intl.NumberFormat('ko-KR').format(realTotal)}
+            ₩ {new Intl.NumberFormat('ko-KR').format(gross)}
           </div>
         </div>
       </div>
@@ -272,65 +407,123 @@ function C_DesignerClosingCard({ id, d, designer }) {
       <table style={{width:'100%', borderCollapse:'collapse', fontSize:11.5, fontVariantNumeric:'tabular-nums'}}>
         <thead>
           <tr style={{background:'#FBFCFE', color:C_MUTED, fontSize:10.5}}>
-            <th style={{...c_thSm, width:36}}>#</th>
-            <th style={{...c_thSm, textAlign:'left', width:52}}>시간</th>
-            <th style={{...c_thSm, textAlign:'left', width:70}}>고객명</th>
+            <th style={{...c_thSm, width:28}}>#</th>
+            <th style={{...c_thSm, textAlign:'left', width:44}}>시간</th>
+            <th style={{...c_thSm, textAlign:'left', width:52}}>고객명</th>
             <th style={{...c_thSm, textAlign:'left'}}>시술명</th>
-            <th style={{...c_thSm, width:22}}></th>
-            <th style={{...c_thSm, textAlign:'right', width:70}}>금액</th>
+            <th style={{...c_thSm, textAlign:'right', width:72}}>고객결제액</th>
+            <th style={{...c_thSm, textAlign:'right', width:72}}>수수료 대상</th>
           </tr>
         </thead>
         <tbody>
           {d.rows.map((r, i) => {
             const ch = STATS_CHANNELS.find(c => c.id === r.channel);
             const pay = PAY_METHODS.find(p => p.id === r.pay);
+            const lineFee = closingRowFee(r, d.settle);
+            const on = spot ? closingSpotOn(r, spot) : null;
             return (
-              <tr key={i} style={{borderTop:`1px solid ${C_BORDER}`}}>
+              <tr key={i} style={{borderTop:`1px solid ${C_BORDER}`, transition:'background 0.12s, opacity 0.12s', ...closingSpotStyle(on)}}>
                 <td style={{...c_tdSm, color:C_MUTED, textAlign:'center'}}>{i+1}</td>
                 <td style={c_tdSm}>{r.time}</td>
-                <td style={{...c_tdSm, color:C_BLUE, fontWeight:500}}>{r.customer}</td>
-                <td style={{...c_tdSm, color:C_INK, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{r.menu}</td>
-                <td style={c_tdSm}>
+                <td style={c_tdSm}><C_CustLink name={r.customer} menu={r.menu} designer={id} amount={r.amount} pay={r.pay}/></td>
+                <td style={{...c_tdSm, color:C_INK, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>
                   <span title={`${ch?.label} · ${pay?.label}`} style={{
-                    display:'inline-block', width:8, height:8, borderRadius:'50%', background:ch?.color,
+                    display:'inline-block', width:7, height:7, borderRadius:'50%', background:ch?.color, marginRight:5,
                   }}/>
+                  {r.menu}
                 </td>
                 <td style={{...c_tdSm, textAlign:'right', color:C_INK, fontWeight:600}}>
-                  {new Intl.NumberFormat('ko-KR').format(r.amount)}
+                  {new Intl.NumberFormat('ko-KR').format(closingPaid(r))}
+                </td>
+                <td style={{...c_tdSm, textAlign:'right', fontWeight:700, color: lineFee ? C_INK : '#94A3B8'}}>
+                  {new Intl.NumberFormat('ko-KR').format(lineFee)}
                 </td>
               </tr>
             );
           })}
-          {/* 소계/합계 행 */}
-          <C_SumRow label="정액권 금액"    value={d.ticket}/>
-          <C_SumRow label="티켓권 금액"    value={0} muted/>
-          <C_SumRow label="헬프 매출"      value={d.help}/>
-          <tr style={{borderTop:`1px solid ${C_BORDER}`, background:'#FBFCFE'}}>
-            <td colSpan="4" style={{...c_tdSm, color:C_MUTED, fontSize:10.5}}>현금 매출 (시술/제품)</td>
-            <td style={c_tdSm}><span style={{width:6, height:6, borderRadius:'50%', background:'#10B981', display:'inline-block'}}/></td>
-            <td style={{...c_tdSm, textAlign:'right', color:C_INK}}>{new Intl.NumberFormat('ko-KR').format(cashTotal)}</td>
-          </tr>
-          <tr style={{borderTop:`1px solid ${C_BORDER}`, background:'#FBFCFE'}}>
-            <td colSpan="4" style={{...c_tdSm, color:C_MUTED, fontSize:10.5}}>카드 매출 (시술/제품)</td>
-            <td style={c_tdSm}><span style={{width:6, height:6, borderRadius:'50%', background:'#3B82F6', display:'inline-block'}}/></td>
-            <td style={{...c_tdSm, textAlign:'right', color:C_INK}}>{new Intl.NumberFormat('ko-KR').format(cardTotal)}</td>
-          </tr>
+          {(d.useLines || []).map((u, i) => {
+            const feeN = u.fee || 0;
+            const feeColor = feeN < 0 ? '#DC2626' : feeN > 0 ? (u.sub ? '#047857' : '#6D28D9') : '#94A3B8';
+            const feeText = feeN > 0 && u.sub
+              ? '+' + new Intl.NumberFormat('ko-KR').format(feeN)
+              : new Intl.NumberFormat('ko-KR').format(feeN);
+            const on = spot ? false : null;
+            return (
+            <tr key={`use-${i}`} style={{borderTop:`1px solid ${C_BORDER}`, background: on === false ? undefined : (u.sub ? '#FFF7ED' : (feeN > 0 ? '#F5F3FF' : C_SURFACE)), transition:'background 0.12s, opacity 0.12s', ...closingSpotStyle(on)}}>
+              <td style={{...c_tdSm, color:C_MUTED, textAlign:'center', boxShadow: u.sub ? 'inset 3px 0 0 #F59E0B' : 'none'}}>{d.rows.length + i + 1}</td>
+              <td style={c_tdSm}>{u.time}</td>
+              <td style={c_tdSm}><C_CustLink name={u.customer} menu={u.menu} designer={id} amount={u.saleAmount} pay="card"/></td>
+              <td style={{...c_tdSm, color:C_INK, whiteSpace:'nowrap'}}>
+                {u.menu}
+                <span style={{marginLeft:6, fontSize:10, fontWeight:800, color: feeN > 0 && !u.sub ? '#6D28D9' : '#94A3B8', background: feeN > 0 && !u.sub ? '#EDE9FE' : '#F1F5F9', borderRadius:8, padding:'1px 5px'}}>{u.tag}</span>
+                {u.sub && <span style={{marginLeft:4, fontSize:10, fontWeight:800, color:'#C2410C', background:'#FFEDD5', borderRadius:8, padding:'1px 5px'}}>대체</span>}
+              </td>
+              <td style={{...c_tdSm, textAlign:'right', color:'#94A3B8', fontWeight:600}}>0</td>
+              <td style={{...c_tdSm, textAlign:'right', fontWeight:700, color:feeColor}}>
+                {feeText}
+              </td>
+            </tr>
+            );
+          })}
+          {d.help ? <C_FeeRow label="헬프 매출" fee={d.help}/> : null}
+          <C_SumBand label="대체 매출" fee={closingSubNet(d)} signed gap/>
+          <C_SumBand label="현금 매출" paid={cashTotal}/>
+          <C_SumBand label="카드 매출" paid={cardTotal}/>
+          {mixTotal ? <C_SumBand label="현금+카드" paid={mixTotal}/> : null}
           <tr style={{borderTop:`2px solid ${C_BLUE}`, background:C_BLUE_SOFT}}>
-            <td colSpan="5" style={{...c_tdSm, color:C_INK, fontWeight:700}}>총 영업액</td>
+            <td colSpan="4" style={{...c_tdSm, color:C_INK, fontWeight:700}}>총 고객 결제액</td>
             <td style={{...c_tdSm, textAlign:'right', color:C_INK, fontWeight:700, fontSize:13}}>
-              ₩ {new Intl.NumberFormat('ko-KR').format(rowTotal + (d.ticket||0) + (d.help||0))}
+              {new Intl.NumberFormat('ko-KR').format(gross)}
             </td>
+            <td style={c_tdSm}/>
           </tr>
-          <C_SumRow label="할인 금액 (지원/자부담)" value={discount ? -discount : 0}/>
           <tr style={{borderTop:`1px solid ${C_BORDER}`, background:C_BLUE_SOFT}}>
-            <td colSpan="5" style={{...c_tdSm, color:C_BLUE, fontWeight:700}}>실 매출계 (시술/제품)</td>
+            <td colSpan="5" style={{...c_tdSm, color:C_BLUE, fontWeight:700}}>수수료 대상</td>
             <td style={{...c_tdSm, textAlign:'right', color:C_BLUE, fontWeight:700, fontSize:13}}>
-              ₩ {new Intl.NumberFormat('ko-KR').format(realTotal)}
+              {new Intl.NumberFormat('ko-KR').format(fee)}
             </td>
           </tr>
         </tbody>
       </table>
     </div>
+  );
+}
+
+function C_CustLink({ name, menu, designer, amount, pay }) {
+  return (
+    <button
+      onClick={() => window.__openSales && window.__openSales({ customer:name, menu, designer, amount, pay, detail:true, key:Date.now() })}
+      style={{
+        background:'none', border:'none', padding:0, margin:0, color:C_BLUE, fontWeight:600,
+        cursor:'pointer', fontFamily:'inherit', fontSize:'inherit', textAlign:'left',
+      }}
+    >{name}</button>
+  );
+}
+
+function C_SumBand({ label, paid, fee, signed, gap }) {
+  const paidOn = paid != null;
+  const feeOn = fee != null;
+  const n = paidOn ? (paid || 0) : (fee || 0);
+  const color = signed ? (n < 0 ? '#DC2626' : n > 0 ? '#047857' : C_MUTED) : C_INK;
+  const text = `${signed && n > 0 ? '+' : ''}${new Intl.NumberFormat('ko-KR').format(n)}`;
+  return (
+    <tr style={{background:'#F4F7FB', borderTop: gap ? `8px solid ${C_BG}` : `1px solid ${C_BORDER}`}}>
+      <td colSpan="4" style={{...c_tdSm, color:C_MUTED, fontSize:11, fontWeight:700, letterSpacing:'-0.01em'}}>{label}</td>
+      <td style={{...c_tdSm, textAlign:'right', color: paidOn ? color : C_MUTED, fontWeight:700}}>{paidOn ? text : ''}</td>
+      <td style={{...c_tdSm, textAlign:'right', color: feeOn ? color : C_MUTED, fontWeight:700}}>{feeOn ? text : ''}</td>
+    </tr>
+  );
+}
+
+function C_FeeRow({ label, fee }) {
+  return (
+    <tr style={{borderTop:`1px solid ${C_BORDER}`, background:'#FBFCFE'}}>
+      <td colSpan="5" style={{...c_tdSm, color:C_MUTED, fontSize:10.5}}>{label}</td>
+      <td style={{...c_tdSm, textAlign:'right', color: fee < 0 ? '#EF4444' : fee === 0 ? '#CBD5E1' : C_INK, fontWeight:600}}>
+        {new Intl.NumberFormat('ko-KR').format(fee)}
+      </td>
+    </tr>
   );
 }
 
@@ -346,14 +539,17 @@ function C_SumRow({ label, value, muted }) {
 }
 
 // ─ 매출 마감: 요약 뷰 (전체 랭킹표) ─
-function C_SalesSummary() {
-  const rows = Object.entries(CLOSING_TODAY).map(([id, d]) => {
+function C_SalesSummary({ book }) {
+  if (!Object.keys(book).length) return null;
+  const rows = Object.entries(book).map(([id, d]) => {
     const designer = DESIGNERS.find(x => x.id === id);
     const total = d.rows.reduce((a,r) => a+r.amount, 0);
     const count = d.rows.length;
     const cash = d.rows.filter(r => r.pay === 'cash').reduce((a,r) => a+r.amount, 0);
     const card = d.rows.filter(r => r.pay === 'card').reduce((a,r) => a+r.amount, 0);
-    return { id, name: d.name, designer, total, count, cash, card, ticket: d.ticket||0, discount: d.coupon||0, real: total + (d.ticket||0) - (d.coupon||0) + (d.help||0) };
+    const sub = closingSubNet(d);
+    const prepaid = d.rows.filter(r => r.kind === 'prepaid' || r.kind === 'ticket').reduce((a, r) => a + r.amount, 0);
+    return { id, name: d.name, designer, total, count, cash, card, ticket: prepaid, sub, real: closingFee(d) };
   }).sort((a,b) => b.real - a.real);
   const grand = rows.reduce((a,r) => a+r.real, 0);
   const maxReal = Math.max(...rows.map(r => r.real), 1);
@@ -373,9 +569,9 @@ function C_SalesSummary() {
             <th style={c_th}>현금</th>
             <th style={c_th}>카드</th>
             <th style={c_th}>정액권</th>
-            <th style={c_th}>할인</th>
+            <th style={c_th}>대체</th>
             <th style={{...c_th, textAlign:'left', width:120}}>매출 비교</th>
-            <th style={{...c_th, background:C_BLUE_SOFT, color:C_BLUE}}>실 매출</th>
+            <th style={{...c_th, background:C_BLUE_SOFT, color:C_BLUE}}>수수료 대상</th>
           </tr>
         </thead>
         <tbody>
@@ -393,7 +589,7 @@ function C_SalesSummary() {
               <td style={{...c_td, color: r.cash > 0 ? C_INK : '#CBD5E1'}}>{r.cash > 0 ? new Intl.NumberFormat('ko-KR').format(r.cash) : '0'}</td>
               <td style={{...c_td, color: r.card > 0 ? C_INK : '#CBD5E1'}}>{r.card > 0 ? new Intl.NumberFormat('ko-KR').format(r.card) : '0'}</td>
               <td style={{...c_td, color: r.ticket > 0 ? C_INK : '#CBD5E1'}}>{r.ticket > 0 ? new Intl.NumberFormat('ko-KR').format(r.ticket) : '0'}</td>
-              <td style={{...c_td, color: r.discount > 0 ? '#EF4444' : '#CBD5E1'}}>{r.discount > 0 ? '-'+new Intl.NumberFormat('ko-KR').format(r.discount) : '0'}</td>
+              <td style={{...c_td, color: r.sub > 0 ? '#047857' : r.sub < 0 ? '#DC2626' : '#CBD5E1'}}>{r.sub === 0 ? '0' : (r.sub > 0 ? '+' : '') + new Intl.NumberFormat('ko-KR').format(r.sub)}</td>
               <td style={{padding:'8px 12px'}}>
                 <div style={{height:6, background:'#F1F5F9', borderRadius:3, overflow:'hidden'}}>
                   <div style={{width:`${r.real/maxReal*100}%`, height:'100%', background:r.designer?.color}}/>
@@ -414,17 +610,18 @@ function C_SalesSummary() {
 }
 
 // ─ 매출 마감: 리스트+상세 (좌 리스트, 우 카드 하나) ─
-function C_SalesListDetail({ selected, onSelect }) {
-  const ids = Object.keys(CLOSING_TODAY);
-  const cur = CLOSING_TODAY[selected] || CLOSING_TODAY[ids[0]];
-  const curId = CLOSING_TODAY[selected] ? selected : ids[0];
+function C_SalesListDetail({ book, selected, onSelect, spot }) {
+  const ids = Object.keys(book);
+  if (!ids.length) return null;
+  const cur = book[selected] || book[ids[0]];
+  const curId = book[selected] ? selected : ids[0];
   const curDesigner = DESIGNERS.find(x => x.id === curId);
   return (
     <div style={{display:'grid', gridTemplateColumns:'260px 1fr', gap:12}}>
       <div style={{background:C_SURFACE, borderRadius:10, border:`1px solid ${C_BORDER}`, overflow:'hidden', maxHeight:640, overflowY:'auto'}}>
         {ids.map(id => {
-          const d = CLOSING_TODAY[id];
-          const total = d.rows.reduce((a,r) => a+r.amount, 0) + (d.ticket||0) - (d.coupon||0) + (d.help||0);
+          const d = book[id];
+          const total = closingReal(d);
           const active = id === curId;
           const designer = DESIGNERS.find(x => x.id === id);
           return (
@@ -448,7 +645,7 @@ function C_SalesListDetail({ selected, onSelect }) {
         })}
       </div>
       <div>
-        <C_DesignerClosingCard id={curId} d={cur} designer={curDesigner}/>
+        <C_DesignerClosingCard id={curId} d={cur} designer={curDesigner} spot={spot}/>
       </div>
     </div>
   );

@@ -48,7 +48,8 @@ const SCHEDULE_SUB = [
   { id:'booking',  label:'예약 현황' },
   { id:'schedule', label:'매장 일정' },
   { id:'stats',    label:'객수 통계' },
-  { id:'closing',  label:'일일 마감' },
+  { id:'closing',   label:'일일 마감' },
+  { id:'staff-sub', label:'담당자 대체현황' },
 ];
 const SETTINGS_SUB = [
   { id:'settings-menu',     label:'메뉴 설정' },
@@ -58,6 +59,8 @@ const SETTINGS_SUB = [
   { id:'settings-payroll',  label:'실시간 급여정산' },
   { id:'settings-lumi',     label:'쌀롱 루미 설정' },
   { id:'settings-phone',    label:'수신전화 설정' },
+  { id:'settings-terminal', label:'단말기 설정' },
+  { id:'settings-group',    label:'고객 그룹 설정' },
 ];
 const ANALYTICS_SUB = [
   { id:'analytics-dashboard', label:'분석 대시보드' },
@@ -92,6 +95,7 @@ const STUB_PAGES = {
   'analytics-terminal':   { crumbs:['홈','분석','단말기 설정'],    title:'단말기 설정',     desc:'카드/POS 단말기 연동을 설정합니다.' },
   'settings-payroll':     { crumbs:['홈','설정','실시간 급여정산'], title:'실시간 급여정산', desc:'디자이너별 매출·수수료를 실시간으로 정산합니다.' },
   'settings-lumi':        { crumbs:['홈','설정','쌀롱 루미'],       title:'쌀롱 루미 설정',   desc:'매장 통합 브랜드 서비스인 쌀롱 루미 연동을 설정합니다.' },
+  'settings-terminal':    { crumbs:['홈','설정','단말기 설정'],    title:'단말기 설정',     desc:'카드/POS 단말기 연동을 설정합니다.' },
 };
 
 function C_SideBar({ page, onPage }) {
@@ -184,7 +188,7 @@ function C_SideBar({ page, onPage }) {
             cursor:'default',
           }}>
             <div style={{
-              minWidth: it.subKey === 'settings' || it.subKey === 'marketing' ? 200 : 160,
+              minWidth: it.subKey === 'settings' || it.subKey === 'marketing' ? 200 : it.subKey === 'schedule' ? 188 : 160,
               background:C_SURFACE,
               border:`1px solid ${C_BORDER}`, borderRadius:10,
               boxShadow:'0 8px 24px rgba(11,20,37,0.12), 0 2px 4px rgba(11,20,37,0.04)',
@@ -231,6 +235,7 @@ function C_TopHeader({ onOpenCustomerRegister, onOpenGuestSales, onOpenClosing }
     <div style={{
       display:'flex', alignItems:'center', gap:12,
       padding:'12px 20px', background:C_SURFACE, borderBottom:`1px solid ${C_BORDER}`,
+      position:'relative', zIndex:320,
     }}>
       {/* 로고 + 상호 (한 줄) */}
       <div style={{display:'flex', alignItems:'center', gap:10, flexShrink:0}}>
@@ -2425,7 +2430,7 @@ function VariantC() {
         <C_TopHeader
           onOpenCustomerRegister={() => setModal('customer-register')}
           onOpenGuestSales={() => setSalesTarget({ guest:true, key: Date.now() })}
-          onOpenClosing={() => setPage('closing')}
+          onOpenClosing={() => { setSalesTarget(null); setPage('closing'); }}
         />
       </div>
       {/* 아래: 좌 사이드바(아이콘) + 우 페이지 콘텐츠 (+ 예약/매장일정 페이지는 우측 사이드 패널 260) */}
@@ -2455,6 +2460,7 @@ function VariantC() {
           if (page === 'schedule')  return <C_SchedulePage/>;
           if (page === 'stats' && StatsCmp)   return <StatsCmp/>;
           if (page === 'closing' && ClosingCmp) return <ClosingCmp/>;
+          if (page === 'staff-sub' && window.C_StaffSubPage) return <window.C_StaffSubPage/>;
           const OpsCmp = window.C_OpsPage;
           const SmsCmp = window.C_SmsPage;
           if (page === 'settings-menu' && SettingsMenu) return <SettingsMenu/>;
@@ -2463,6 +2469,7 @@ function VariantC() {
           if (page === 'settings-sms' && SmsCmp) return <SmsCmp/>;
           const PhoneCmp = window.C_PhonePage;
           if (page === 'settings-phone' && PhoneCmp) return <PhoneCmp/>;
+          if (page === 'settings-group' && window.C_CustomerGroupPage) return <window.C_CustomerGroupPage/>;
           if (STUB_PAGES[page] && StubPage) return <StubPage {...STUB_PAGES[page]}/>;
           return <C_BookingPage/>;
         })()}

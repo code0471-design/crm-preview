@@ -307,8 +307,9 @@ const CLOSING_TODAY = {
     name:'이상현',
     rows: [
       { time:'10:00', customer:'이하늘', menu:'디지털펌',      amount:180000, channel:'road', pay:'card' },
+      { time:'15:30', customer:'김도윤', menu:'정액권 30만원', amount:300000, channel:'revisit', pay:'card', kind:'prepaid' },
     ],
-    ticket:20000, coupon:0, help:5000,
+    ticket:0, coupon:0, help:5000,
   },
   kims: {
     name:'김산',
@@ -692,6 +693,7 @@ const PERMISSION_TREE = [
       { id:'sch-store',    label:'매장 일정' },
       { id:'sch-stats',    label:'객수 통계' },
       { id:'sch-closing',  label:'일일 마감' },
+      { id:'sch-sub',      label:'담당자 대체현황' },
     ],
   },
   {
@@ -732,6 +734,7 @@ const PERMISSION_TREE = [
       { id:'set-lumi',     label:'쌀롱 루미 설정' },
       { id:'set-terminal', label:'단말기 설정' },
       { id:'set-phone',    label:'수신전화 설정' },
+      { id:'set-group',    label:'고객 그룹 설정' },
     ],
   },
 ];

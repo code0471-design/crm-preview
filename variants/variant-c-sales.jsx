@@ -169,9 +169,16 @@ function SL_detailTable(cat) {
   }
 }
 
-function SL_DetailTable({ cat, limit }) {
+function SL_DetailTable({ cat, limit, serviceRows, onServiceDate }) {
   if (cat === 'message') return <SL_MessageTable limit={limit}/>;
-  const d = SL_detailTable(cat);
+  const d = (cat === 'service' && serviceRows) ? {
+    cols:'78px minmax(0,1fr) 56px 76px 62px', head:['날짜','시술','시술자','금액','결제'],
+    rows: serviceRows.map(r => [
+      { t:r.date, date:r }, { t:r.menu, b:1 }, { t:r.designer },
+      { t: r.amount ? SL_won(r.amount) : '-', a:'r', b:1 },
+      { t:r.method, a:'r', c: r.method === '티켓' ? SL_TEAL : r.method === '정액권' ? '#7C3AED' : null },
+    ]),
+  } : SL_detailTable(cat);
   const rows = limit ? d.rows.slice(0, limit) : d.rows;
   const cell = (c, i) => (
     <span key={i} style={{
@@ -190,8 +197,15 @@ function SL_DetailTable({ cat, limit }) {
         <div style={{padding:'18px', textAlign:'center', fontSize:12, color:C_MUTED}}>내역이 없습니다</div>
       ) : rows.map((r, i) => (
         <div key={i} style={{display:'grid', gridTemplateColumns:d.cols, gap:8, padding:'6px 14px', alignItems:'center',
+          background: r[0].date && r[0].date.mine ? '#EFF6FF' : 'transparent',
           borderBottom: i === rows.length - 1 ? 'none' : `1px solid ${C_BORDER}`}}>
-          {r.map(cell)}
+          {r.map((c, ci) => c.date && onServiceDate ? (
+            <button key={ci} onClick={() => onServiceDate(c.date)} style={{
+              border:'none', background:'transparent', padding:0, margin:0, cursor:'pointer', fontFamily:'inherit',
+              textAlign:'left', fontWeight:800, color:C_BLUE, fontSize:11.5, textDecoration:'underline', textUnderlineOffset:2,
+              fontVariantNumeric:'tabular-nums',
+            }}>{c.t}</button>
+          ) : cell(c, ci))}
         </div>
       ))}
     </>
@@ -312,7 +326,7 @@ function SL_DetailChips({ value, onChange, size = 'sm' }) {
   );
 }
 
-function SL_DetailModal({ initial, cust, onClose }) {
+function SL_DetailModal({ initial, cust, onClose, serviceRows, onServiceDate }) {
   const [cat, setCat] = React.useState(initial);
   const msgs = SL_useMessages();
   const total = cat === 'message' ? msgs.length : SL_detailTable(cat).rows.length;
@@ -332,7 +346,7 @@ function SL_DetailModal({ initial, cust, onClose }) {
           <SL_DetailChips value={cat} onChange={setCat} size="md"/>
         </div>
         <div style={{overflowY:'auto'}}>
-          <SL_DetailTable cat={cat}/>
+          <SL_DetailTable cat={cat} serviceRows={serviceRows} onServiceDate={onServiceDate}/>
         </div>
       </div>
     </div>
@@ -403,7 +417,7 @@ function C_SalesPage({ target, onClose }) {
   const [stage, setStage] = React.useState(null);
   const [items, setItems] = React.useState(() => target.menu ? [{
     key: 1, type:'service', name: target.menu,
-    price: SL_findMenuPrice(target.menu), discount:0, designer: initDesigner, ticketId:null,
+    price: target.amount != null ? target.amount : SL_findMenuPrice(target.menu), discount:0, designer: initDesigner, ticketId:null,
   }] : []);
   const [picker, setPicker] = React.useState(null);
   const [historyOpen, setHistoryOpen] = React.useState(false);
@@ -414,7 +428,7 @@ function C_SalesPage({ target, onClose }) {
   const [smsOpen, setSmsOpen] = React.useState(false);
   const [payDate, setPayDate] = React.useState('2026-10-01T16:45');
   // 결제수단: 기본은 카드 한 가지로 전액. '나눠서 결제'를 켜면 수단별 금액 입력
-  const [method, setMethod] = React.useState('card');
+  const [method, setMethod] = React.useState(target.pay === 'cash' ? 'cash' : target.pay === 'transfer' ? 'transfer' : 'card');
   const [split, setSplit] = React.useState(false);
   const [pay, setPay] = React.useState({ ...SL_ZERO_PAY });
   const [etcOpen, setEtcOpen] = React.useState(false);
@@ -433,8 +447,13 @@ function C_SalesPage({ target, onClose }) {
   const [coupon, setCoupon] = React.useState('none');
   const [memo, setMemo] = React.useState('');
   const [memoOpen, setMemoOpen] = React.useState(false);
-  const [settled, setSettled] = React.useState(false);
+  const [settled, setSettled] = React.useState(!!target.detail);
+  const [saleOpen, setSaleOpen] = React.useState(!!target.detail);
+  const landedOnModal = React.useRef(!!target.detail);
+  const [serviceLog, setServiceLog] = React.useState(SL_SERVICE_LOG);
   const [sendSms, setSendSms] = React.useState(true);
+  const [shareOpen, setShareOpen] = React.useState(false);
+  const [shares, setShares] = React.useState([]);
 
   const ASSET = (!isGuest && window.CUSTOMER_ASSETS && window.CUSTOMER_ASSETS[customer.name]) || { membership:0, tickets:[] };
   const MEMBERSHIP_BAL_INIT = ASSET.membership;
@@ -504,9 +523,52 @@ function C_SalesPage({ target, onClose }) {
   const displayName = cust.name || '비회원';
   const custOut = { ...cust, name: displayName };
   const ready = items.length > 0 && remaining === 0;
+  const methodLabel = (id) => (SL_METHODS.find(m => m.id === id) || {}).full || '카드';
+  const loadVisit = (row) => {
+    const designerId = DESIGNERS.find(d => d.name === row.designer)?.id || initDesigner;
+    const methodId = { '카드':'card', '현금':'cash', '계좌이체':'transfer', '네이버페이':'naver', '카카오페이':'kakao' }[row.method] || 'card';
+    setItems([{
+      key: Date.now(), type:'service', name: row.menu, price: row.amount || 0,
+      discount:0, designer: designerId, ticketId:null,
+    }]);
+    setMethod(methodId);
+    if (row.date) setPayDate(`${row.date.replace(/\./g, '-')}T16:45`);
+    setSettled(true);
+    setSaleOpen(true);
+    setHistoryOpen(false);
+  };
+  const completeSale = () => {
+    const designerName = DESIGNERS.find(d => d.id === (items[0] && items[0].designer))?.name || '';
+    const stamp = (payDate || '').slice(0, 10).replace(/-/g, '.');
+    setServiceLog(prev => [{
+      date: stamp, menu: items.map(it => it.name).join(' + '), designer: designerName,
+      amount: payable, method: methodLabel(method), mine: true,
+    }, ...prev.filter(r => !r.mine)]);
+    setAssetTab('service');
+    setSettled(true);
+  };
+  const deleteSale = () => {
+    if (!window.confirm('이 매출을 삭제할까요?')) return;
+    setServiceLog(prev => prev.filter(r => !r.mine));
+    setSettled(false);
+    setSaleOpen(false);
+    if (landedOnModal.current) onClose();
+  };
+  const editSale = () => {
+    if (saleOpen) {
+      window.__toast && window.__toast('매출이 수정되었습니다');
+      if (!landedOnModal.current) setSaleOpen(false);
+      return;
+    }
+    setSaleOpen(true);
+  };
+  const requestClose = () => {
+    if (saleOpen && !landedOnModal.current) { setSaleOpen(false); return; }
+    onClose();
+  };
 
   return (
-    <div style={settled ? {
+    <div style={saleOpen ? {
       position:'fixed', inset:0, zIndex:230, background:'rgba(11,20,37,0.45)',
       display:'flex', alignItems:'center', justifyContent:'center', padding:20,
     } : {
@@ -514,12 +576,12 @@ function C_SalesPage({ target, onClose }) {
       fontFamily:'inherit', boxSizing:'border-box',
     }}>
     <div style={{
-      width: settled ? 948 : '100%',
-      maxWidth: settled ? '96vw' : 'none',
-      height: settled ? '92vh' : '100%',
+      width: saleOpen ? 948 : '100%',
+      maxWidth: saleOpen ? '96vw' : 'none',
+      height: saleOpen ? '92vh' : '100%',
       background:C_BG, overflow:'auto', fontFamily:'inherit', boxSizing:'border-box',
-      borderRadius: settled ? 16 : 0,
-      boxShadow: settled ? '0 24px 64px rgba(11,20,37,0.28)' : 'none',
+      borderRadius: saleOpen ? 16 : 0,
+      boxShadow: saleOpen ? '0 24px 64px rgba(11,20,37,0.28)' : 'none',
     }}>
       <div style={{padding:'12px 14px 16px', display:'flex', flexDirection:'column', gap:10}}>
         {/* ── 헤더 ── */}
@@ -527,7 +589,7 @@ function C_SalesPage({ target, onClose }) {
           background:C_SURFACE, border:`1px solid ${C_BORDER}`, borderRadius:12,
           padding:'10px 14px', display:'flex', alignItems:'center', gap:12,
         }}>
-          <button onClick={onClose} style={sl_iconBtn} title="예약 화면으로">
+          <button onClick={requestClose} style={sl_iconBtn} title="예약 화면으로">
             <IconChevronL size={16}/>
           </button>
           <div style={{
@@ -597,8 +659,8 @@ function C_SalesPage({ target, onClose }) {
             }}>
               <IconCheck size={13}/> {stage === 'service' ? '시술중' : '시술 시작'}
             </button>
-            {settled && (
-              <button onClick={() => setSettled(false)} title="닫기" style={sl_iconBtn}>
+            {saleOpen && (
+              <button onClick={requestClose} title="닫기" style={sl_iconBtn}>
                 <IconX size={16}/>
               </button>
             )}
@@ -661,12 +723,13 @@ function C_SalesPage({ target, onClose }) {
               {/* 보유 자산 */}
               <div style={{display:'grid', gridTemplateColumns:'repeat(3, minmax(0,1fr))', gap:8}}>
                 <SL_AssetCard label="포인트" value={`${SL_won(POINT_BAL)} P`} color="#059669"/>
-                <SL_AssetCard label="정액권 잔액" value={MEMBERSHIP_BAL > 0 ? `${SL_won(MEMBERSHIP_BAL)}원` : '없음'} color="#7C3AED"/>
+                <SL_AssetCard label="정액권 잔액" value={MEMBERSHIP_BAL > 0 ? `${SL_won(MEMBERSHIP_BAL)}원` : '없음'} color="#7C3AED"
+                  shared={shares.some(s => s.membership)} onShare={() => setShareOpen(true)}/>
                 <SL_AssetCard label="티켓권"
-                  value={TICKETS.length ? TICKETS.map(t => `${t.name} ${ticketRemain(t.id)}회`).join(' · ') : '없음'} color={SL_TEAL}/>
+                  value={TICKETS.length ? TICKETS.map(t => `${t.name} ${ticketRemain(t.id)}회`).join(' · ') : '없음'} color={SL_TEAL}
+                  shared={shares.some(s => s.ticket)} onShare={() => setShareOpen(true)}/>
               </div>
 
-              {!settled && (
               <div style={sl_card}>
                 <div style={{padding:'8px 12px 8px 14px', display:'flex', alignItems:'center', gap:8, borderBottom:`1px solid ${C_BORDER}`}}>
                   <span style={{...sl_title, whiteSpace:'nowrap'}}>상세 내역</span>
@@ -684,9 +747,8 @@ function C_SalesPage({ target, onClose }) {
                     display:'inline-flex', alignItems:'center', gap:2, padding:0,
                   }}>전체보기 <IconChevronR size={11}/></button>
                 </div>
-                <SL_DetailTable cat={assetTab} limit={5}/>
+                <SL_DetailTable cat={assetTab} limit={5} serviceRows={serviceLog} onServiceDate={loadVisit}/>
               </div>
-              )}
               </>)}
 
               {/* 판매 항목 */}
@@ -988,11 +1050,11 @@ function C_SalesPage({ target, onClose }) {
                 {/* ⑤ 버튼 */}
                 <div style={{padding:'12px 14px 14px', display:'flex', flexDirection:'column', gap:6}}>
                   {settled ? (<>
-                    <button onClick={() => window.__toast && window.__toast('매출이 수정되었습니다')} style={{
+                    <button onClick={editSale} style={{
                       padding:'12px', borderRadius:12, border:'none', fontFamily:'inherit',
                       fontSize:14, fontWeight:800, background:C_BLUE, color:'#fff', cursor:'pointer',
                     }}>매출 수정</button>
-                    <button onClick={() => { window.__toast && window.__toast('매출이 삭제되었습니다'); onClose(); }} style={{
+                    <button onClick={deleteSale} style={{
                       padding:'12px', borderRadius:12, border:'none', fontFamily:'inherit',
                       fontSize:14, fontWeight:800, background:'#DC2626', color:'#fff', cursor:'pointer',
                     }}>매출 삭제</button>
@@ -1002,7 +1064,7 @@ function C_SalesPage({ target, onClose }) {
                       border:`1.5px solid ${C_BORDER}`,
                     }}>영수증 출력</button>
                   </>) : (<>
-                  <button disabled={!ready} onClick={() => setSettled(true)} style={{
+                  <button disabled={!ready} onClick={completeSale} style={{
                     padding:'14px', borderRadius:12, border:'none', fontFamily:'inherit',
                     fontSize:16, fontWeight:800, letterSpacing:'-0.01em',
                     background: ready ? C_BLUE : '#E5EAF2',
@@ -1031,7 +1093,7 @@ function C_SalesPage({ target, onClose }) {
       </div>
 
       {picker && <SL_ItemPicker type={picker} onClose={() => setPicker(null)} onAdd={(list) => addItems(picker, list)}/>}
-      {historyOpen && <SL_DetailModal initial={assetTab} cust={custOut} onClose={() => setHistoryOpen(false)}/>}
+      {historyOpen && <SL_DetailModal initial={assetTab} cust={custOut} serviceRows={serviceLog} onServiceDate={loadVisit} onClose={() => setHistoryOpen(false)}/>}
       {editOpen && <SL_CustomerEditModal cust={cust}
         onSave={(v) => { setCust(v); setEditOpen(false); }} onClose={() => setEditOpen(false)}/>}
       {smsOpen && <SL_SmsModal cust={cust} onClose={() => setSmsOpen(false)}/>}
@@ -1045,6 +1107,13 @@ function C_SalesPage({ target, onClose }) {
       {claimOpen && <SL_ClaimModal cust={custOut} designerId={initDesigner}
         onSave={() => { setCust(c => ({ ...c, claim: (c.claim || 0) + 1 })); setClaimOpen(false); }}
         onClose={() => setClaimOpen(false)}/>}
+      {shareOpen && <SL_ShareModal
+        owner={displayName}
+        membership={MEMBERSHIP_BAL}
+        tickets={TICKETS.map(t => `${t.name} ${ticketRemain(t.id)}회`).join(' · ') || '없음'}
+        shares={shares}
+        onChange={setShares}
+        onClose={() => setShareOpen(false)}/>}
       {refundOpen && <SL_RefundModal cust={custOut} initial={assetTab === 'ticket' ? 'ticket' : 'membership'}
         membershipBal={MEMBERSHIP_BAL} tickets={ticketBase}
         onDone={(r) => {
@@ -1065,13 +1134,139 @@ function SL_Tag({ t }) {
   return <span style={{fontSize:10, fontWeight:800, padding:'2px 7px', borderRadius:8, background:bg, color:fg}}>{t}</span>;
 }
 
-function SL_AssetCard({ label, value, sub, color }) {
+function SL_ShareGlyph({ size=13 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="6" cy="12" r="2.2"/><circle cx="17" cy="6.5" r="2.2"/><circle cx="17" cy="17.5" r="2.2"/>
+      <path d="M8.1 11.1 14.7 7.7M8.1 12.9l6.6 3.4"/>
+    </svg>
+  );
+}
+
+function SL_AssetCard({ label, value, sub, color, onShare, shared }) {
   return (
     <div style={{...sl_card, padding:'9px 12px', borderTop:`3px solid ${color}`}}>
-      <div style={{fontSize:10.5, color:C_MUTED, fontWeight:700}}>{label}</div>
+      <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:6}}>
+        <div style={{fontSize:10.5, color:C_MUTED, fontWeight:700}}>{label}</div>
+        {onShare && (
+          <button onClick={onShare} title="다른 고객과 공유" style={{
+            width:22, height:22, borderRadius:6, flexShrink:0, cursor:'pointer', padding:0,
+            border:`1px solid ${shared ? color : C_BORDER}`,
+            background: shared ? color + '18' : '#fff', color: shared ? color : C_MUTED,
+            display:'flex', alignItems:'center', justifyContent:'center',
+          }}><SL_ShareGlyph/></button>
+        )}
+      </div>
       <div style={{fontSize:13.5, fontWeight:800, color:C_INK, marginTop:2, fontVariantNumeric:'tabular-nums',
         letterSpacing:'-0.01em', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>
         {value} {sub && <span style={{fontSize:10.5, color:C_MUTED, fontWeight:600}}>{sub}</span>}
+      </div>
+    </div>
+  );
+}
+
+function SL_ShareModal({ owner, membership, tickets, shares, onChange, onClose }) {
+  const [pickMem, setPickMem] = React.useState(true);
+  const [pickTix, setPickTix] = React.useState(false);
+  const [q, setQ] = React.useState('');
+  const [who, setWho] = React.useState(null);
+  const people = CUSTOMERS.filter(c => c.name !== owner && (
+    !q.trim() || c.name.includes(q.trim()) || (c.phone || '').includes(q.trim())
+  ));
+  const share = () => {
+    if (!who || (!pickMem && !pickTix)) return;
+    onChange(list => {
+      const rest = list.filter(s => s.name !== who.name);
+      return [...rest, { name:who.name, phone:who.phone, membership:pickMem, ticket:pickTix }];
+    });
+    setWho(null);
+  };
+  const choice = (on, label, desc, color, toggle) => (
+    <button onClick={toggle} style={{
+      flex:1, textAlign:'left', cursor:'pointer', fontFamily:'inherit', borderRadius:10, padding:'10px 12px',
+      border:`1.5px solid ${on ? color : C_BORDER}`, background: on ? color + '12' : '#fff',
+    }}>
+      <div style={{display:'flex', alignItems:'center', gap:6}}>
+        <span style={{
+          width:16, height:16, borderRadius:4, border:`1.5px solid ${on ? color : '#CBD5E1'}`,
+          background: on ? color : '#fff', color:'#fff', display:'inline-flex', alignItems:'center', justifyContent:'center',
+        }}>{on ? <IconCheck size={11}/> : null}</span>
+        <span style={{fontSize:13, fontWeight:800, color:C_INK}}>{label}</span>
+      </div>
+      <div style={{fontSize:11.5, color:C_MUTED, marginTop:4, fontWeight:600}}>{desc}</div>
+    </button>
+  );
+  return (
+    <div onClick={onClose} style={{...sl_overlay, zIndex:260}}>
+      <div onClick={e => e.stopPropagation()} style={{...sl_modal, width:440}}>
+        <div style={sl_modalHead}>
+          <div style={{flex:1}}>
+            <div style={{fontSize:16, fontWeight:800, color:C_INK}}>보유권 공유</div>
+            <div style={{fontSize:11.5, color:C_MUTED, marginTop:2}}>{owner}님의 정액권·티켓을 다른 고객과 함께 씁니다</div>
+          </div>
+          <button onClick={onClose} style={sl_iconBtn}><IconX size={15}/></button>
+        </div>
+        <div style={{padding:'14px 18px', display:'flex', flexDirection:'column', gap:12}}>
+          <div>
+            <div style={{fontSize:12, fontWeight:800, color:C_INK, marginBottom:6}}>무엇을 공유할까요</div>
+            <div style={{display:'flex', gap:8}}>
+              {choice(pickMem, '정액권', membership > 0 ? `${SL_won(membership)}원` : '잔액 없음', '#7C3AED', () => setPickMem(v => !v))}
+              {choice(pickTix, '티켓', tickets, SL_TEAL, () => setPickTix(v => !v))}
+            </div>
+          </div>
+          <div>
+            <div style={{fontSize:12, fontWeight:800, color:C_INK, marginBottom:6}}>공유할 고객</div>
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder="이름 또는 전화번호" style={sl_input}/>
+            <div style={{marginTop:6, maxHeight:168, overflowY:'auto', border:`1px solid ${C_BORDER}`, borderRadius:10}}>
+              {people.length === 0 && <div style={{padding:'16px', textAlign:'center', fontSize:12, color:C_MUTED}}>찾는 고객이 없어요</div>}
+              {people.slice(0, 8).map(c => {
+                const on = who && who.name === c.name;
+                return (
+                  <button key={c.id} onClick={() => setWho(c)} style={{
+                    width:'100%', border:'none', borderBottom:`1px solid ${C_BORDER}`, cursor:'pointer', fontFamily:'inherit',
+                    background: on ? C_BLUE_SOFT : '#fff', padding:'8px 12px', display:'flex', alignItems:'center', gap:8, textAlign:'left',
+                  }}>
+                    <span style={{width:26, height:26, borderRadius:'50%', background: on ? C_BLUE : '#E8EEF8', color: on ? '#fff' : C_BLUE,
+                      display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:800, flexShrink:0}}>{c.name.charAt(0)}</span>
+                    <span style={{flex:1, minWidth:0}}>
+                      <span style={{fontSize:13, fontWeight:800, color:C_INK}}>{c.name}</span>
+                      <span style={{display:'block', fontSize:11, color:C_MUTED}}>{c.phone}</span>
+                    </span>
+                    {on && <IconCheck size={14} style={{color:C_BLUE}}/>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {shares.length > 0 && (
+            <div>
+              <div style={{fontSize:12, fontWeight:800, color:C_INK, marginBottom:6}}>공유 중</div>
+              <div style={{display:'flex', flexDirection:'column', gap:6}}>
+                {shares.map(s => (
+                  <div key={s.name} style={{display:'flex', alignItems:'center', gap:8, padding:'8px 10px', border:`1px solid ${C_BORDER}`, borderRadius:10}}>
+                    <div style={{flex:1, minWidth:0}}>
+                      <div style={{fontSize:13, fontWeight:800, color:C_INK}}>{s.name}</div>
+                      <div style={{fontSize:11, color:C_MUTED, marginTop:2}}>
+                        {[s.membership && '정액권', s.ticket && '티켓'].filter(Boolean).join(' · ')}
+                      </div>
+                    </div>
+                    <button onClick={() => onChange(list => list.filter(x => x.name !== s.name))} style={{
+                      border:'1px solid #FCA5A5', background:'#FEF2F2', color:'#DC2626', borderRadius:7,
+                      fontSize:11.5, fontWeight:800, fontFamily:'inherit', cursor:'pointer', padding:'5px 8px',
+                    }}>해제</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <div style={sl_modalFoot}>
+          <button onClick={onClose} style={{...sl_ghostBtn}}>닫기</button>
+          <button onClick={share} disabled={!who || (!pickMem && !pickTix)} style={{
+            ...sl_primaryBtn, opacity: !who || (!pickMem && !pickTix) ? 0.45 : 1,
+            cursor: !who || (!pickMem && !pickTix) ? 'not-allowed' : 'pointer',
+          }}>공유하기</button>
+        </div>
       </div>
     </div>
   );
