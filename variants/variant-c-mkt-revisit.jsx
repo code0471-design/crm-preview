@@ -33,6 +33,7 @@ function rvCohort(arr, w) {
 // 상태: 재방문 / 아직 주기 전 / 지금 연락할 때 / 이탈 위험
 const RV_ST = {
   back:  { label:'기간 안 재방문', color:'#059669', bg:'#ECFDF5' },
+  yet:   { label:'아직 안 옴',    color:'#64748B', bg:'#F1F5F9' },
   late:  { label:'기간 후 재방문', color:'#0D9488', bg:'#F0FDFA' },
   wait:  { label:'주기 전',       color:'#94A3B8', bg:'#F1F5F9' },
   due:   { label:'지금 연락할 때', color:'#D97706', bg:'#FFFBEB' },
@@ -53,6 +54,7 @@ const rvCat = (id) => MKT_CATS.find(c => c.id === id) || { name:id, color:'#94A3
 
 // ───────── 페이지 ─────────
 function C_MktRevisitPage() {
+  const [mode, setMode] = React.useState('basic'); // basic | advanced
   const [month, setMonth] = React.useState('2026-06');
   const [win, setWin] = React.useState('cycle');
   const [catF, setCatF] = React.useState('all');
@@ -62,7 +64,7 @@ function C_MktRevisitPage() {
   const [cycleOpen, setCycleOpen] = React.useState(false);
   React.useEffect(() => { window.__rvOpenCycle = () => setCycleOpen(true); return () => { delete window.__rvOpenCycle; }; }, []);
   const [sel, setSel] = React.useState(null);       // 선택한 디자이너/시술 id
-  const [stF, setStF] = React.useState('due');
+  const [stF, setStF] = React.useState('all');
   const [picked, setPicked] = React.useState(() => new Set());
   const [send, setSend] = React.useState(null);     // 문자 보낼 대상 배열
   const [confirm, setConfirm] = React.useState(null);
@@ -134,17 +136,29 @@ function C_MktRevisitPage() {
             <span style={{color:C_INK, fontWeight:600}}>재방문율</span>
           </div>
           <div style={{flex:1}}/>
-          <button onClick={() => setCycleOpen(o => !o)} style={{
-            ...c_ghostBtnSm, fontFamily:'inherit', display:'flex', alignItems:'center', gap:5,
-            background: cycleOpen ? C_BLUE_SOFT : C_SURFACE, color: cycleOpen ? C_BLUE : C_INK, borderColor: cycleOpen ? '#C7D6F5' : C_BORDER,
-          }}><IconClock size={12}/> 시술별 재방문 주기</button>
-          <button style={{...c_ghostBtnSm, fontFamily:'inherit'}}>엑셀 다운로드</button>
-          {cycleOpen && <RvCyclePop cycle={cycle} setCycle={setCycle} onClose={() => setCycleOpen(false)}/>}
+          <window.MktSeg size="sm" value={mode} onChange={(v) => { setMode(v); setPicked(new Set()); setSel(null); setStF(v === 'basic' ? 'all' : 'due'); setCycleOpen(false); }} options={[
+            { id:'basic', label:'기본형' }, { id:'advanced', label:'고급형' },
+          ]}/>
+          {mode === 'advanced' && (
+            <button onClick={() => setCycleOpen(o => !o)} style={{
+              ...c_ghostBtnSm, fontFamily:'inherit', display:'flex', alignItems:'center', gap:5,
+              background: cycleOpen ? C_BLUE_SOFT : C_SURFACE, color: cycleOpen ? C_BLUE : C_INK, borderColor: cycleOpen ? '#C7D6F5' : C_BORDER,
+            }}><IconClock size={12}/> 시술별 방문주기 설정</button>
+          )}
+          {mode === 'advanced' && cycleOpen && <RvCyclePop cycle={cycle} setCycle={setCycle} onClose={() => setCycleOpen(false)}/>}
         </div>
 
         <div className="mkt-scroll" style={{flex:1, overflow:'auto', padding:'16px 20px 24px', display:'flex', flexDirection:'column', gap:14}}>
           <style>{`.mkt-scroll > * { flex-shrink: 0; }`}</style>
 
+          {mode === 'basic' && (
+            <RvBasicView
+              month={month} setMonth={setMonth} who={who} setWho={setWho}
+              sel={sel} setSel={setSel} stF={stF} setStF={setStF}
+              picked={picked} setPicked={setPicked} openSend={openSend}
+            />
+          )}
+          {mode === 'advanced' && (<>
           {/* 기준 */}
           <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap'}}>
             <select value={month} onChange={e => { setMonth(e.target.value); setPicked(new Set()); setSel(null); }} style={rvSel}>
@@ -324,6 +338,7 @@ function C_MktRevisitPage() {
               }}><IconMegaphone size={13}/> 목록 {list.length.toLocaleString()}명에게 문자</button>
             </div>
           </div>
+          </>)}
         </div>
       </div>
 
@@ -342,6 +357,248 @@ const rvSel = {
   height:34, padding:'0 10px', border:`1px solid ${C_BORDER}`, borderRadius:8,
   fontSize:13.5, fontWeight:700, color:C_INK, background:C_SURFACE, fontFamily:'inherit', outline:'none',
 };
+
+// 기본형 — 그 달에 온 고객이 지금까지 다시 왔는지만
+function RvBasicView({ month, setMonth, who, setWho, sel, setSel, stF, setStF, picked, setPicked, openSend }) {
+  const tagged = React.useMemo(() => RV_VISITS
+    .filter(v => who === 'all' || (who === 'new' ? v.isNew : !v.isNew))
+    .map(v => ({ ...v, ym: rvYm(v.days), came: v.after != null })), [who]);
+  const rows = React.useMemo(() => RV_MONTHS.map(ym => {
+    const arr = tagged.filter(v => v.ym === ym);
+    const back = arr.filter(v => v.came).length;
+    return { ym, n: arr.length, back, rate: rvPct(back, arr.length) };
+  }), [tagged]);
+  const base = tagged.filter(v => v.ym === month);
+  const backN = base.filter(v => v.came).length;
+  const yetN = base.length - backN;
+  const rate = rvPct(backN, base.length);
+  const groups = MKT_DESIGNERS.map(d => {
+    const arr = base.filter(v => v.designer === d.id);
+    const back = arr.filter(v => v.came).length;
+    return { id:d.id, name:d.name, color:d.color, role:d.role, arr, n:arr.length, back, yet:arr.length - back, rate: rvPct(back, arr.length) };
+  }).filter(g => g.n > 0).sort((a, b) => b.rate - a.rate);
+  const scope = sel ? (groups.find(g => g.id === sel) || { arr:[] }).arr : base;
+  const matchSt = (v) => stF === 'back' ? v.came : stF === 'yet' ? !v.came : true;
+  const list = scope.filter(matchSt).sort((a, b) => b.days - a.days);
+  const listShown = list.slice(0, 40);
+  const pickedList = list.filter(v => picked.has(v.id));
+  const selG = sel && groups.find(g => g.id === sel);
+  const allOn = listShown.length > 0 && listShown.every(v => picked.has(v.id));
+  const togglePick = (id) => setPicked(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const withSt = (arr) => arr.map(v => ({ ...v, st: v.came ? 'back' : 'yet' }));
+  const cols = '1.3fr 72px 2fr 72px 80px 76px';
+
+  return (
+    <>
+      <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap'}}>
+        <select value={month} onChange={e => { setMonth(e.target.value); setPicked(new Set()); setSel(null); }} style={rvSel}>
+          {RV_MONTHS.map(m => <option key={m} value={m}>2026년 {rvMonthLabel(m)}</option>)}
+        </select>
+        <span style={{fontSize:13.5, color:C_INK}}>에 온 고객이 <b>지금까지</b> 다시 왔는지</span>
+        <div style={{flex:1}}/>
+        <window.MktSeg size="sm" value={who} onChange={(v) => { setWho(v); setPicked(new Set()); setSel(null); }} options={[
+          { id:'all', label:'전체 고객' }, { id:'new', label:'신규' }, { id:'old', label:'기존' },
+        ]}/>
+      </div>
+      <div style={{fontSize:11.5, color:C_INK, background:C_BLUE_SOFT, border:'1px solid #D6E0F7', borderRadius:8, padding:'8px 12px', marginTop:-4, lineHeight:1.6}}>
+        시술이나 방문 주기는 나누지 않아요. 그 달에 온 고객이 오늘까지 한 번이라도 다시 왔는지만 봐요. 시술별로 나누어 보려면 위의 <b>고급형</b>을 누르세요.
+      </div>
+
+      <div style={{background:C_SURFACE, border:`1px solid ${C_BORDER}`, borderRadius:10, overflow:'hidden'}}>
+        <div style={{display:'flex', alignItems:'center', padding:'12px 16px', borderBottom:`1px solid ${C_BORDER}`}}>
+          <div style={{fontSize:13, fontWeight:700, color:C_INK, flex:1}}>월별, 지금까지 다시 온 고객</div>
+          <span style={{fontSize:11.5, color:C_MUTED}}>행을 누르면 아래에 그 달이 적용돼요</span>
+        </div>
+        <div style={{display:'grid', gridTemplateColumns:'140px 100px 100px 1fr', padding:'8px 16px', fontSize:11, fontWeight:700, color:C_MUTED, background:'#FBFCFE', borderBottom:`1px solid ${C_BORDER}`}}>
+          <div>방문 월</div>
+          <div style={{textAlign:'right'}}>방문 고객</div>
+          <div style={{textAlign:'right'}}>다시 온 고객</div>
+          <div style={{paddingLeft:16}}>재방문율</div>
+        </div>
+        {rows.map(row => {
+          const on = row.ym === month;
+          return (
+            <button key={row.ym} onClick={() => { setMonth(row.ym); setPicked(new Set()); setSel(null); }} style={{
+              display:'grid', gridTemplateColumns:'140px 100px 100px 1fr', alignItems:'center', width:'100%',
+              padding:'8px 16px', border:'none', borderTop:'1px solid #EFF2F7', cursor:'pointer', fontFamily:'inherit', textAlign:'left',
+              background: on ? '#F8FAFF' : C_SURFACE, boxShadow: on ? `inset 3px 0 0 ${C_BLUE}` : 'none',
+            }}>
+              <div style={{fontSize:12.5, fontWeight: on ? 700 : 500, color:C_INK}}>2026년 {rvMonthLabel(row.ym)}</div>
+              <div style={{fontSize:12.5, color:C_MUTED, textAlign:'right', fontVariantNumeric:'tabular-nums'}}>{row.n}명</div>
+              <div style={{fontSize:12.5, color:C_INK, textAlign:'right', fontWeight:600, fontVariantNumeric:'tabular-nums'}}>{row.back}명</div>
+              <div style={{display:'flex', alignItems:'center', gap:8, paddingLeft:16}}>
+                <div style={{flex:1, height:8, borderRadius:4, background:'#EEF1F6'}}>
+                  <div style={{height:'100%', width:`${row.rate}%`, background:C_BLUE, borderRadius:4}}/>
+                </div>
+                <span style={{width:48, textAlign:'right', fontSize:12.5, fontWeight:700, color:C_BLUE, fontVariantNumeric:'tabular-nums'}}>{row.n ? `${row.rate}%` : '-'}</span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{display:'grid', gridTemplateColumns:'1.3fr 1fr 1fr 1fr', background:C_SURFACE, border:`1px solid ${C_BORDER}`, borderRadius:10, overflow:'hidden'}}>
+        <div style={{padding:'14px 16px'}}>
+          <div style={{fontSize:11.5, fontWeight:600, color:C_MUTED}}>재방문율</div>
+          <div style={{display:'flex', alignItems:'baseline', gap:2, marginTop:4}}>
+            <span style={{fontSize:26, fontWeight:800, color:C_BLUE, letterSpacing:'-0.02em', fontVariantNumeric:'tabular-nums'}}>{rate}</span>
+            <span style={{fontSize:13, fontWeight:700, color:C_BLUE}}>%</span>
+          </div>
+          <div style={{fontSize:11, color:C_MUTED, marginTop:3}}>{base.length.toLocaleString()}명 중 {backN.toLocaleString()}명이 지금까지 다시 옴</div>
+        </div>
+        {[
+          { l:`${rvMonthLabel(month)} 방문 고객`, v:base.length, sub:'그 달에 온 고객', st:null },
+          { l:'다시 온 고객', v:backN, sub:'오늘까지 한 번이라도 재방문', st:'back' },
+          { l:'아직 안 온 고객', v:yetN, sub:'그 뒤로 방문 기록이 없어요', st:'yet' },
+        ].map((x, i) => (
+          <div key={i} onClick={() => x.st && setStF(x.st)} style={{
+            padding:'14px 16px', borderLeft:`1px solid ${C_BORDER}`, cursor: x.st ? 'pointer' : 'default',
+            background: x.st && stF === x.st ? (x.st === 'back' ? '#ECFDF5' : '#F8FAFC') : 'transparent',
+          }}>
+            <div style={{fontSize:11.5, fontWeight:600, color:C_MUTED}}>{x.l}</div>
+            <div style={{display:'flex', alignItems:'baseline', gap:2, marginTop:4}}>
+              <span style={{fontSize:20, fontWeight:800, color:C_INK, letterSpacing:'-0.02em', fontVariantNumeric:'tabular-nums'}}>{x.v.toLocaleString()}</span>
+              <span style={{fontSize:12, fontWeight:600, color:C_MUTED}}>명</span>
+            </div>
+            <div style={{fontSize:11, color:C_MUTED, marginTop:3}}>{x.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{background:C_SURFACE, border:`1px solid ${C_BORDER}`, borderRadius:10, overflow:'hidden'}}>
+        <div style={{display:'flex', alignItems:'center', gap:8, padding:'0 14px', height:48, borderBottom:`1px solid ${C_BORDER}`}}>
+          <div style={{fontSize:13, fontWeight:700, color:C_INK}}>디자이너별</div>
+          <div style={{flex:1}}/>
+          <span style={{fontSize:11.5, color:C_MUTED}}>행을 누르면 아래 고객 목록이 걸러져요</span>
+        </div>
+        <div style={{display:'grid', gridTemplateColumns:cols, gap:10, padding:'9px 16px', background:'#FBFCFE', borderBottom:`1px solid ${C_BORDER}`, fontSize:11, fontWeight:700, color:C_MUTED}}>
+          <div>디자이너</div>
+          <div style={{textAlign:'right'}}>방문 고객</div>
+          <div>재방문율 <span style={{fontWeight:500}}>(점선 = 매장 평균 {rate}%)</span></div>
+          <div style={{textAlign:'right'}}>다시 옴</div>
+          <div style={{textAlign:'right'}}>아직 안 옴</div>
+          <div/>
+        </div>
+        {groups.map((g, i) => {
+          const on = sel === g.id;
+          const up = g.rate >= rate;
+          return (
+            <div key={g.id} onClick={() => { setSel(on ? null : g.id); setPicked(new Set()); }} style={{
+              display:'grid', gridTemplateColumns:cols, gap:10, alignItems:'center', cursor:'pointer',
+              padding:'10px 16px', borderTop: i ? '1px solid #EFF2F7' : 'none', fontSize:12.5, color:C_INK,
+              background: on ? C_BLUE_SOFT : C_SURFACE, boxShadow: on ? `inset 3px 0 0 ${C_BLUE}` : 'none',
+            }}>
+              <div style={{display:'flex', alignItems:'center', gap:7, minWidth:0}}>
+                <span style={{width:8, height:8, borderRadius:'50%', background:g.color, flexShrink:0}}/>
+                <span style={{fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{g.name}</span>
+                {g.role && g.role !== '디자이너' && <span style={{fontSize:10.5, color:C_MUTED}}>{g.role}</span>}
+              </div>
+              <div style={{textAlign:'right', fontVariantNumeric:'tabular-nums', color:C_MUTED}}>{g.n}</div>
+              <div style={{display:'flex', alignItems:'center', gap:8}}>
+                <div style={{flex:1, height:8, borderRadius:4, background:'#EEF1F6', position:'relative'}}>
+                  <div style={{position:'absolute', left:0, top:0, bottom:0, width:`${g.rate}%`, background: up ? C_BLUE : '#93A8D8', borderRadius:4}}/>
+                  <div style={{position:'absolute', left:`${rate}%`, top:-3, bottom:-3, borderLeft:`1.5px dashed ${C_INK}`, opacity:0.4}}/>
+                </div>
+                <span style={{width:44, textAlign:'right', fontWeight:700, fontVariantNumeric:'tabular-nums', color: up ? C_BLUE : C_INK}}>{g.rate}%</span>
+              </div>
+              <div style={{textAlign:'right', fontVariantNumeric:'tabular-nums', color:'#059669', fontWeight:600}}>{g.back}</div>
+              <div style={{textAlign:'right', fontVariantNumeric:'tabular-nums', color:C_MUTED}}>{g.yet}</div>
+              <div style={{textAlign:'right'}}>
+                <button disabled={!g.yet} onClick={(e) => { e.stopPropagation(); openSend(withSt(g.arr.filter(v => !v.came)), `${g.name} · 아직 안 옴`); }} style={{
+                  height:28, padding:'0 10px', borderRadius:6, fontFamily:'inherit', fontSize:11.5, fontWeight:700,
+                  border:`1px solid ${g.yet ? '#C7D6F5' : C_BORDER}`, background: g.yet ? C_SURFACE : C_BG, color: g.yet ? C_BLUE : '#B6C0CF',
+                  cursor: g.yet ? 'pointer' : 'not-allowed', whiteSpace:'nowrap',
+                }}>문자 {g.yet}</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{background:C_SURFACE, border:`1px solid ${C_BORDER}`, borderRadius:10, overflow:'hidden'}}>
+        <div style={{display:'flex', alignItems:'center', gap:8, padding:'12px 14px', borderBottom:`1px solid ${C_BORDER}`, flexWrap:'wrap'}}>
+          <div style={{fontSize:13, fontWeight:700, color:C_INK}}>
+            {selG ? <>{selG.name} <span style={{color:C_MUTED, fontWeight:500}}>고객</span></> : '전체 고객'}
+          </div>
+          {selG && <button onClick={() => setSel(null)} style={{border:'none', background:'#EEF1F6', color:C_MUTED, borderRadius:10, fontSize:11, padding:'2px 8px', cursor:'pointer', fontFamily:'inherit'}}>해제 ✕</button>}
+          <div style={{flex:1}}/>
+          {[
+            { id:'all', label:'전체', n:scope.length },
+            { id:'back', label:'다시 옴', n:scope.filter(v => v.came).length },
+            { id:'yet', label:'아직 안 옴', n:scope.filter(v => !v.came).length },
+          ].map(k => {
+            const on = stF === k.id;
+            return (
+              <button key={k.id} onClick={() => { setStF(k.id); setPicked(new Set()); }} style={{
+                padding:'5px 10px', fontSize:12, fontWeight: on ? 700 : 500, borderRadius:14, cursor:'pointer', fontFamily:'inherit',
+                border:`1px solid ${on ? C_BLUE : C_BORDER}`, background: on ? C_BLUE_SOFT : C_SURFACE, color: on ? C_BLUE : C_INK,
+              }}>{k.label} <span style={{fontVariantNumeric:'tabular-nums', opacity:0.8}}>{k.n}</span></button>
+            );
+          })}
+        </div>
+        <div style={{
+          display:'grid', gridTemplateColumns:'20px 1.4fr 0.9fr 0.6fr 0.7fr 1.5fr', gap:8, alignItems:'center',
+          padding:'9px 14px', background:'#FBFCFE', borderBottom:`1px solid ${C_BORDER}`, fontSize:11, fontWeight:700, color:C_MUTED,
+        }}>
+          <RvCheck on={allOn} onClick={() => setPicked(p => { const n = new Set(p); listShown.forEach(v => allOn ? n.delete(v.id) : n.add(v.id)); return n; })}/>
+          <div>고객</div><div>담당</div><div>구분</div><div>방문일</div><div>지금까지</div>
+        </div>
+        {listShown.map((v, i) => {
+          const on = picked.has(v.id);
+          return (
+            <div key={v.id} onClick={() => togglePick(v.id)} style={{
+              display:'grid', gridTemplateColumns:'20px 1.4fr 0.9fr 0.6fr 0.7fr 1.5fr', gap:8, alignItems:'center', cursor:'pointer',
+              padding:'9px 14px', borderTop: i ? '1px solid #EFF2F7' : 'none', fontSize:12.5, color:C_INK, background: on ? '#F5F8FE' : C_SURFACE,
+            }}>
+              <RvCheck on={on} onClick={(e) => { e.stopPropagation(); togglePick(v.id); }}/>
+              <div style={{minWidth:0}}>
+                <div style={{display:'flex', alignItems:'center', gap:5}}>
+                  <span style={{fontWeight:600}}>{v.name}</span>
+                  {!v.consent && <span style={{fontSize:10, color:C_CORAL, fontWeight:700}}>수신거부</span>}
+                </div>
+                <div style={{fontSize:11, color:C_MUTED, fontVariantNumeric:'tabular-nums'}}>{v.phone}</div>
+              </div>
+              <div style={{display:'flex', alignItems:'center', gap:5}}><span style={{width:6, height:6, borderRadius:'50%', background:rvDesColor(v.designer)}}/>{rvDesName(v.designer)}</div>
+              <div>
+                <span style={{fontSize:11, fontWeight:700, padding:'3px 8px', borderRadius:10, background: v.isNew ? '#EFF6FF' : '#F1F5F9', color: v.isNew ? '#1D4ED8' : C_MUTED}}>{v.isNew ? '신규' : '기존'}</span>
+              </div>
+              <div style={{fontVariantNumeric:'tabular-nums', color:C_MUTED}}>{rvDate(v.days)}</div>
+              <div style={{fontSize:12, fontVariantNumeric:'tabular-nums'}}>
+                {v.came ? (
+                  <span style={{color:'#059669', fontWeight:700}}>{v.after}일 만에 다시 옴{!v.same && <span style={{fontWeight:500, color:'#B45309'}}> → {rvDesName(v.toDes)}</span>}</span>
+                ) : (
+                  <span style={{color:C_MUTED}}>아직 안 옴 · {v.days}일 지남</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        {list.length === 0 && <div style={{padding:'36px', textAlign:'center', fontSize:12.5, color:C_MUTED}}>해당하는 고객이 없어요</div>}
+        <div style={{display:'flex', alignItems:'center', gap:8, padding:'10px 14px', borderTop:`1px solid ${C_BORDER}`, background:'#FBFCFE', position:'sticky', bottom:0}}>
+          <span style={{fontSize:12, color:C_MUTED}}>
+            {list.length > listShown.length ? `${listShown.length} / ${list.length.toLocaleString()}명 표시 · ` : ''}
+            {pickedList.length > 0 ? <><b style={{color:C_INK}}>{pickedList.length}명</b> 선택</> : '고객을 선택하거나, 아직 안 온 고객에게 문자를 보낼 수 있어요'}
+          </span>
+          <div style={{flex:1}}/>
+          {pickedList.length > 0 && (
+            <button onClick={() => openSend(withSt(pickedList), '선택한 고객')} style={{...c_ghostBtnSm, height:34, padding:'0 14px', fontFamily:'inherit', fontWeight:600}}>
+              선택 {pickedList.length}명에게 문자
+            </button>
+          )}
+          <button disabled={!yetN || (selG && !selG.yet) || stF === 'back'} onClick={() => {
+            const yet = (selG ? selG.arr : base).filter(v => !v.came);
+            openSend(withSt(stF === 'yet' ? list : yet), `${selG ? selG.name + ' · ' : ''}아직 안 옴`);
+          }} style={{
+            height:34, padding:'0 16px', border:'none', borderRadius:8, fontFamily:'inherit', fontSize:12.5, fontWeight:700, color:'#fff',
+            background: (!yetN || (selG && !selG.yet) || stF === 'back') ? '#C3CCDA' : C_BLUE,
+            cursor: (!yetN || (selG && !selG.yet) || stF === 'back') ? 'not-allowed' : 'pointer',
+            display:'flex', alignItems:'center', gap:6,
+          }}><IconMegaphone size={13}/> 아직 안 온 고객에게 문자</button>
+        </div>
+      </div>
+    </>
+  );
+}
 
 // ───── 월별 코호트 표 ─────
 function RvCohortGrid({ rows, month, win, onPick }) {
@@ -465,11 +722,11 @@ function RvCyclePop({ cycle, setCycle, onClose }) {
   const [draft, setDraft] = React.useState(cycle);
   return (
     <div style={{
-      position:'absolute', top:44, right:120, width:340, zIndex:40, background:C_SURFACE,
+      position:'absolute', top:44, right:14, width:340, zIndex:40, background:C_SURFACE,
       border:`1px solid ${C_BORDER}`, borderRadius:10, boxShadow:'0 12px 28px rgba(11,20,37,0.14)',
     }}>
       <div style={{padding:'12px 14px', borderBottom:`1px solid ${C_BORDER}`}}>
-        <div style={{fontSize:13, fontWeight:700, color:C_INK}}>시술별 재방문 주기</div>
+        <div style={{fontSize:13, fontWeight:700, color:C_INK}}>시술별 방문주기 설정</div>
         <div style={{fontSize:11.5, color:C_MUTED, marginTop:3, lineHeight:1.5}}>이 기간이 지나면 '지금 연락할 때', 1.5배가 지나면 '이탈 위험'으로 분류돼요.</div>
       </div>
       <div style={{padding:'8px 14px', display:'flex', flexDirection:'column', gap:4, maxHeight:300, overflow:'auto'}}>
@@ -509,7 +766,7 @@ function RvSendDrawer({ target, onClose, onRequest }) {
   const byDes = {};
   arr.forEach(v => { byDes[v.designer] = (byDes[v.designer] || 0) + 1; });
   const desTop = Object.entries(byDes).sort((a, b) => b[1] - a[1]).slice(0, 4);
-  const stCnt = ['due','risk','wait'].map(k => [k, arr.filter(v => v.st === k).length]).filter(x => x[1]);
+  const stCnt = ['due','risk','wait','yet'].map(k => [k, arr.filter(v => v.st === k).length]).filter(x => x[1]);
   return (
     <div onClick={onClose} style={{position:'fixed', inset:0, background:'rgba(11,20,37,0.32)', zIndex:150, display:'flex', justifyContent:'flex-end'}}>
       <div onClick={e => e.stopPropagation()} style={{display:'flex', height:'100%', boxShadow:'-12px 0 40px rgba(11,20,37,0.2)'}}>
