@@ -1,0 +1,13 @@
+---
+description: 작업이 끝나면 crm-preview 스테이징에 바로 올린다
+alwaysApply: true
+---
+
+# 스테이징 반영
+
+이 저장소에서 화면이나 데이터 작업을 마치면 묻지 말고 커밋하고 `origin` `main`에 푸시한다. 스테이징은 https://code0471-design.github.io/crm-preview/ 이다. GitHub Pages가 반영되기까지 약 1분 걸릴 수 있다.
+
+- 커밋 메시지는 한 문장이고 다 로 끝낸다.
+- PowerShell here-string으로 메시지를 넘긴다.
+- 작성자는 환경 변수로만 지정한다. git config는 바꾸지 않는다. 이름 `code0471-design`, 메일 `312821243+code0471-design@users.noreply.github.com`.
+- 사용자가 커밋하지 말라고 한 경우, 또는 시크릿 파일이 포함된 경우에는 푸시하지 않는다.
