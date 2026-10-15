@@ -63,6 +63,7 @@ const SETTINGS_SUB = [
   { id:'settings-group',    label:'고객 그룹 설정' },
 ];
 const ANALYTICS_SUB = [
+  { id:'analytics-ledger',    label:'매출내역' },
   { id:'analytics-dashboard', label:'분석 대시보드' },
   { id:'analytics-sales',     label:'매출 분석' },
   { id:'analytics-customer',  label:'고객 분석' },
@@ -2461,6 +2462,7 @@ function VariantC() {
           if (page === 'stats' && StatsCmp)   return <StatsCmp/>;
           if (page === 'closing' && ClosingCmp) return <ClosingCmp/>;
           if (page === 'staff-sub' && window.C_StaffSubPage) return <window.C_StaffSubPage/>;
+          if (page === 'analytics-ledger' && window.C_SalesLedgerPage) return <window.C_SalesLedgerPage/>;
           const OpsCmp = window.C_OpsPage;
           const SmsCmp = window.C_SmsPage;
           if (page === 'settings-menu' && SettingsMenu) return <SettingsMenu/>;

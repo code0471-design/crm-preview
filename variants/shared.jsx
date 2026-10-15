@@ -709,6 +709,7 @@ const PERMISSION_TREE = [
     id:'analytics',
     title:'분석',
     items:[
+      { id:'ana-ledger',   label:'매출내역' },
       { id:'ana-view',     label:'리포트 조회' },
       { id:'ana-export',   label:'리포트 다운로드' },
     ],
