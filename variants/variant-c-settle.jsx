@@ -49,34 +49,34 @@ function stMoney(o) {
 function stWon(n) {
   return new Intl.NumberFormat('ko-KR').format(Math.round(n || 0));
 }
-function stLine(m, day, designer, visit, cat, kind, service, pay, use, n) {
-  return { m, day, designer, visit, cat, kind, service, pay: pay || {}, use: use || {}, n: n || 1 };
+function stLine(m, day, designer, visit, cat, kind, service, pay, use, n, extra) {
+  return { m, day, designer, visit, cat, kind, service, pay: pay || {}, use: use || {}, n: n || 1, receipt:false, sub:0, ...(extra || {}) };
 }
 
 // 시술·제품 행은 pay + use = service. 정액권·티켓·예약금 판매는 service 0.
 const ST_ROWS = [
   // 10/17 오늘
-  stLine(10, 17, 'moon',  'revisit', 'color',   'service', 70000,  { card:50000 }, { membership:20000 }),
+  stLine(10, 17, 'moon',  'revisit', 'color',   'service', 70000,  { card:50000 }, { membership:20000 }, 1, { sub:20000 }),
   stLine(10, 17, 'moon',  'revisit', 'clinic',  'service', 80000,  { card:80000 }, {}),
   stLine(10, 17, 'lee',   'revisit', 'perm',    'service', 180000, { card:180000 }, {}),
   stLine(10, 17, 'jung',  'naver',   'color',   'service', 130000, { naver:130000 }, {}),
-  stLine(10, 17, 'kims',  'new',     'perm',    'service', 220000, { card:150000, bank:70000 }, {}),
-  stLine(10, 17, 'leehj', 'walkin',  'cut',     'service', 25000,  { cash:25000 }, {}),
+  stLine(10, 17, 'kims',  'new',     'perm',    'service', 220000, { card:150000, bank:70000 }, {}, 1, { receipt:true, sub:40000 }),
+  stLine(10, 17, 'leehj', 'walkin',  'cut',     'service', 25000,  { cash:25000 }, {}, 1, { receipt:true }),
   stLine(10, 17, 'kimjy', 'revisit', 'cut',     'service', 20000,  { cash:20000 }, {}),
   stLine(10, 17, 'park',  'intro',   'clinic',  'service', 90000,  { card:40000 }, { ticket:50000 }),
   stLine(10, 17, 'moon',  'revisit', null,      'membership', 0,   { card:300000 }, {}),
   stLine(10, 17, 'lee',   'new',     'product', 'product', 45000,  { card:45000 }, {}),
   // 10/16
   stLine(10, 16, 'moon',  'revisit', 'color',   'service', 150000, { card:150000 }, {}),
-  stLine(10, 16, 'lee',   'revisit', 'perm',    'service', 160000, { card:100000 }, { membership:60000 }),
+  stLine(10, 16, 'lee',   'revisit', 'perm',    'service', 160000, { card:100000 }, { membership:60000 }, 1, { sub:50000 }),
   stLine(10, 16, 'jung',  'revisit', 'cut',     'service', 35000,  { card:35000 }, {}),
   stLine(10, 16, 'kims',  'naver',   'color',   'service', 120000, { naver:120000 }, {}),
   stLine(10, 16, 'leehj', 'revisit', 'cut',     'service', 30000,  { cash:15000, card:15000 }, {}),
-  stLine(10, 16, 'park',  'revisit', 'product', 'product', 28000,  { card:28000 }, {}),
+  stLine(10, 16, 'park',  'revisit', 'product', 'product', 28000,  { gift:28000 }, {}),
   stLine(10, 16, 'kimjy', 'new',     'cut',     'service', 18000,  { cash:18000 }, {}),
   stLine(10, 16, 'jung',  'revisit', null,      'ticket',  0,      { card:200000 }, {}),
   // 10/15
-  stLine(10, 15, 'moon',  'new',     'perm',    'service', 250000, { card:200000, bank:50000 }, {}),
+  stLine(10, 15, 'moon',  'new',     'perm',    'service', 250000, { card:200000, bank:50000 }, {}, 1, { receipt:true }),
   stLine(10, 15, 'lee',   'intro',   'color',   'service', 140000, { card:80000 }, { membership:60000 }),
   stLine(10, 15, 'jung',  'revisit', 'clinic',  'service', 70000,  { card:70000 }, {}),
   stLine(10, 15, 'kims',  'revisit', 'cut',     'service', 40000,  { cash:40000 }, {}),
@@ -128,6 +128,15 @@ const ST_ROWS = [
   stLine(9, 2,  'jung',  'revisit', null,     'ticket',  0,      { card:300000 }, {}, 1),
 ];
 
+const ST_FLOW = [
+  { m:10, day:17, dir:'out', cash:15000, bank:0, receipt:false },
+  { m:10, day:11, dir:'in',  cash:0, bank:150000, receipt:true },
+  { m:10, day:4,  dir:'in',  cash:20000, bank:80000, receipt:false },
+  { m:10, day:7,  dir:'out', cash:35000, bank:0, receipt:false },
+  { m:9,  day:18, dir:'in',  cash:0, bank:200000, receipt:true },
+  { m:9,  day:9,  dir:'out', cash:45000, bank:60000, receipt:false },
+];
+
 function stBlank() {
   return {
     pay:0, service:0, customers:0, serviceN:0, lines:0,
@@ -164,6 +173,14 @@ function stRowsFor(preset) {
   if (preset === 'week') return oct.filter(r => r.day >= 12);
   return oct;
 }
+function stFlowsFor(preset) {
+  if (preset === 'last') return ST_FLOW.filter(f => f.m === 9);
+  const oct = ST_FLOW.filter(f => f.m === 10);
+  if (preset === 'today') return oct.filter(f => f.day === 17);
+  if (preset === 'yesterday') return oct.filter(f => f.day === 16);
+  if (preset === 'week') return oct.filter(f => f.day >= 12);
+  return oct;
+}
 function stCollect(rows) {
   const all = stBlank();
   const byDes = {};
@@ -194,7 +211,7 @@ function C_SettlePage() {
 
   return (
     <div style={{flex:1, display:'flex', flexDirection:'column', minWidth:0, overflow:'hidden', background:C_BG}}>
-      <div style={{width:948, flexShrink:0, flex:1, display:'flex', flexDirection:'column', minHeight:0}}>
+      <div style={{width:'100%', flexShrink:0, flex:1, display:'flex', flexDirection:'column', minWidth:0, minHeight:0}}>
         <div style={{
           display:'flex', alignItems:'center', gap:8, flexWrap:'wrap',
           padding:'10px 14px', background:C_SURFACE, borderBottom:`1px solid ${C_BORDER}`,
@@ -276,7 +293,7 @@ function C_SettlePage() {
             })}
           </div>
 
-          {view === 'overview' && <StOverview b={b} basis={basis} byDes={data.byDes} total={total} ticket={ticket}/>}
+          {view === 'overview' && <StOverview b={b} basis={basis} rows={rows} flows={designer === 'all' ? stFlowsFor(preset) : []} total={total} ticket={ticket} designerOn={designer !== 'all'}/>}
           {view === 'designer' && <StDesigner byDes={data.byDes} basis={basis}/>}
           {view === 'menu' && <StMenu b={b} basis={basis}/>}
           {view === 'visit' && <StVisit byVisit={data.byVisit} basis={basis}/>}
@@ -313,9 +330,71 @@ function StBasisCard({ on, kicker, hint, amount, note, onClick }) {
   );
 }
 
-function StOverview({ b, basis, byDes, total, ticket }) {
+function stBlankSlice() {
+  return { cashI:0, bankI:0, cashO:0, bankO:0, card:0, gift:0, naver:0, preUse:0, ticketUse:0, sub:0 };
+}
+function stSliceMoney(s) {
+  return s.cashI + s.bankI + s.cashO + s.bankO + s.card + s.gift + s.naver;
+}
+function stSliceUse(s) {
+  return s.preUse + s.ticketUse;
+}
+function stAddSlice(a, b, sign) {
+  const o = stBlankSlice();
+  const k = sign || 1;
+  Object.keys(o).forEach(key => { o[key] = (a[key] || 0) + k * (b[key] || 0); });
+  return o;
+}
+function stPayInto(s, pay, receipt) {
+  const cash = (pay && pay.cash) || 0;
+  const bank = (pay && pay.bank) || 0;
+  if (receipt) { s.cashI += cash; s.bankI += bank; }
+  else { s.cashO += cash; s.bankO += bank; }
+  s.card += (pay && pay.card) || 0;
+  s.gift += (pay && pay.gift) || 0;
+  s.naver += (pay && pay.naver) || 0;
+}
+function stCloseOf(s, mode, basis) {
+  const money = stSliceMoney(s);
+  if (mode === 'prepaid') return basis === 'pay' ? money : 0;
+  return basis === 'pay' ? money : money + stSliceUse(s);
+}
+function stBuildMatrix(rows) {
+  const svc = stBlankSlice(), pre = stBlankSlice(), tix = stBlankSlice(), prod = stBlankSlice();
+  const byDes = {};
+  ST_DES.forEach(d => { byDes[d.id] = { work: stBlankSlice(), pre: stBlankSlice(), prod: stBlankSlice() }; });
+  rows.forEach(r => {
+    const bucket = r.kind === 'product' ? prod : r.kind === 'ticket' ? tix : (r.kind === 'membership' || r.kind === 'deposit') ? pre : svc;
+    stPayInto(bucket, r.pay, r.receipt);
+    if (r.kind === 'service' || r.kind === 'product') {
+      bucket.preUse += ((r.use && r.use.membership) || 0) + ((r.use && r.use.deposit) || 0) + ((r.use && r.use.point) || 0);
+      bucket.ticketUse += (r.use && r.use.ticket) || 0;
+      bucket.sub += r.sub || 0;
+    }
+    const g = byDes[r.designer];
+    if (!g) return;
+    const dg = r.kind === 'product' ? g.prod : (r.kind === 'membership' || r.kind === 'deposit' || r.kind === 'ticket') ? g.pre : g.work;
+    stPayInto(dg, r.pay, r.receipt);
+    if (r.kind === 'service' || r.kind === 'product') {
+      dg.preUse += ((r.use && r.use.membership) || 0) + ((r.use && r.use.deposit) || 0) + ((r.use && r.use.point) || 0);
+      dg.ticketUse += (r.use && r.use.ticket) || 0;
+      dg.sub += r.sub || 0;
+    }
+  });
+  return { svc, pre, tix, prod, byDes };
+}
+function stFlowSlice(flows, dir) {
+  const s = stBlankSlice();
+  flows.filter(f => f.dir === dir).forEach(f => stPayInto(s, f, f.receipt));
+  return s;
+}
+function stNums(s, total, neg) {
+  const k = neg ? -1 : 1;
+  return [s.cashI, s.bankI, s.cashO, s.bankO, s.card, s.gift, s.naver, s.preUse, s.ticketUse, total].map(n => k * n);
+}
+
+function StOverview({ b, basis, rows, flows, total, ticket, designerOn }) {
   const sale = stSaleSum(b);
-  const used = stUseSum(b);
   const kpis = basis === 'pay' ? [
     { label:'결제 금액', value:`${stWon(b.pay)}원`, sub:'고객이 낸 돈' },
     { label:'결제 건수', value:`${b.lines}건`, sub:`방문 ${b.customers}명` },
@@ -327,14 +406,58 @@ function StOverview({ b, basis, byDes, total, ticket }) {
     { label:'객단가', value:`${stWon(ticket)}원`, sub:'방문 고객 한 명당' },
     { label:'정액권·티켓 소진', value:`${stWon(b.use.membership + b.use.ticket)}원`, sub:'현금으로 안 들어온 매출' },
   ];
-  const parts = basis === 'pay'
-    ? ST_PAYS.map(p => ({ name:p.name, color:p.color, v:b.payMethods[p.id] || 0 }))
-    : ST_CATS.map(c => ({ name:c.name, color:C_BLUE, v:b.cats[c.id] || 0 }));
-  const maxPart = Math.max(1, ...parts.map(p => p.v));
-  const rank = ST_DES.map(d => ({ ...d, v: basis === 'pay' ? byDes[d.id].pay : byDes[d.id].service, customers: byDes[d.id].customers }))
-    .filter(d => d.v > 0)
-    .sort((a, c) => c.v - a.v);
-  const maxRank = Math.max(1, ...rank.map(d => d.v));
+  const mx = stBuildMatrix(rows);
+  const subSvc = stAddSlice(stAddSlice(mx.svc, mx.pre), mx.tix);
+  const store = stAddSlice(subSvc, mx.prod);
+  const flowIn = stFlowSlice(flows, 'in');
+  const flowOut = stFlowSlice(flows, 'out');
+  const profit = stAddSlice(stAddSlice(store, flowIn), flowOut, -1);
+  const closeSvc = stCloseOf(mx.svc, 'work', basis);
+  const closePre = stCloseOf(mx.pre, 'prepaid', basis);
+  const closeTix = stCloseOf(mx.tix, 'prepaid', basis);
+  const closeSub = closeSvc + closePre + closeTix;
+  const closeProd = stCloseOf(mx.prod, 'product', basis);
+  const closeStore = closeSub + closeProd;
+  const closeIn = stSliceMoney(flowIn);
+  const closeOut = stSliceMoney(flowOut);
+  const closeProfit = closeStore + closeIn - closeOut;
+  const storeRows = [
+    { label:'시술', pad:true, nums: stNums(mx.svc, closeSvc) },
+    { label:'선결제', pad:true, nums: stNums(mx.pre, closePre) },
+    { label:'티켓', pad:true, nums: stNums(mx.tix, closeTix) },
+    { label:'시술 소계', sub:true, nums: stNums(subSvc, closeSub) },
+    { label:'제품판매', nums: stNums(mx.prod, closeProd) },
+    { label:'매장 매출 합계', total:true, nums: stNums(store, closeStore) },
+    { label:'입금', pad:true, nums: stNums(flowIn, closeIn) },
+    { label:'출금', pad:true, nums: stNums(flowOut, closeOut, true) },
+    { label:'입출금 소계', sub:true, nums: stNums(stAddSlice(flowIn, flowOut, -1), closeIn - closeOut) },
+    { label:'손익', total:true, nums: stNums(profit, closeProfit) },
+  ];
+  const headNums = ['현금', '통장', '현금', '통장', '카드', '상품권', '네이버페이', '선결제 사용', '티켓 사용', basis === 'pay' ? '합계 · 결제' : '합계 · 시술'];
+
+  const desRows = ST_DES.map(d => {
+    const g = mx.byDes[d.id];
+    const shown = basis === 'pay' ? stAddSlice(g.work, g.pre) : g.work;
+    const use = stSliceUse(g.work);
+    const svcSum = basis === 'pay' ? stSliceMoney(shown) : stSliceMoney(g.work) + use;
+    const prodSum = stSliceMoney(g.prod) + (basis === 'service' ? stSliceUse(g.prod) : 0);
+    const sum = svcSum + prodSum;
+    const subAmt = g.work.sub + g.prod.sub;
+    if (!sum && !use && !stSliceMoney(g.pre)) return null;
+    const cash = (s) => s.cashI + s.cashO;
+    const bank = (s) => s.bankI + s.bankO;
+    return {
+      ...d,
+      svc: [cash(shown), bank(shown), shown.card, shown.gift, shown.naver, use, svcSum],
+      prod: [cash(g.prod), bank(g.prod), g.prod.card, g.prod.gift, g.prod.naver, prodSum],
+      sum, subAmt, settle: sum - subAmt,
+    };
+  }).filter(Boolean).sort((a, c) => c.settle - a.settle);
+  const desFoot = desRows.reduce((a, d) => ({
+    svc: d.svc.map((n, i) => n + (a.svc[i] || 0)),
+    prod: d.prod.map((n, i) => n + (a.prod[i] || 0)),
+    sum: a.sum + d.sum, subAmt: a.subAmt + d.subAmt, settle: a.settle + d.settle,
+  }), { svc:[0,0,0,0,0,0,0], prod:[0,0,0,0,0,0], sum:0, subAmt:0, settle:0 });
 
   return (
     <div style={{display:'flex', flexDirection:'column', gap:12}}>
@@ -348,83 +471,100 @@ function StOverview({ b, basis, byDes, total, ticket }) {
         ))}
       </div>
 
-      <div style={{display:'grid', gridTemplateColumns:'1.15fr 0.85fr', gap:10}}>
-        <div style={stCard}>
-          <div style={stTitle}>{basis === 'pay' ? '결제 수단' : '메뉴 구성'}</div>
-          <div style={{display:'flex', flexDirection:'column', gap:8, marginTop:12}}>
-            {parts.filter(p => p.v > 0).map(p => (
-              <div key={p.name}>
-                <div style={{display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:4}}>
-                  <span style={{fontWeight:700, color:C_INK}}>{p.name}</span>
-                  <span style={{fontWeight:700, color:C_INK, fontVariantNumeric:'tabular-nums'}}>
-                    {stWon(p.v)}원
-                    <span style={{color:C_MUTED, fontWeight:600, marginLeft:6}}>{total ? Math.round(p.v / total * 100) : 0}%</span>
-                  </span>
-                </div>
-                <div style={{height:6, borderRadius:4, background:'#F1F5F9'}}>
-                  <div style={{height:'100%', width:`${p.v / maxPart * 100}%`, borderRadius:4, background: basis === 'pay' ? p.color : C_BLUE}}/>
-                </div>
-              </div>
-            ))}
+      <div style={{...stCard, padding:0, overflow:'hidden'}}>
+        <div style={{padding:'12px 14px', borderBottom:`1px solid ${C_BORDER}`}}>
+          <div style={stTitle}>매장 매출</div>
+          <div style={{fontSize:11.5, color:C_MUTED, marginTop:3}}>
+            {basis === 'pay'
+              ? '합계는 고객이 낸 돈입니다. 선결제·티켓을 사용한 금액은 합계에 넣지 않습니다.'
+              : '합계는 시술·제품 금액입니다. 선결제·티켓을 사용한 금액은 합계에 넣고, 새로 판 금액은 뺍니다.'}
+            {designerOn ? ' 담당자를 고르면 입출금은 빼고 그 담당자 매출만 봅니다.' : ''}
           </div>
         </div>
-
-        <div style={stCard}>
-          <div style={stTitle}>왜 두 금액이 다른가</div>
-          <div style={{marginTop:10, display:'flex', flexDirection:'column', gap:6}}>
-            <StBridge label="결제 금액" value={b.pay} strong/>
-            {b.sale.membership > 0 && <StBridge label="정액권 판매" value={-b.sale.membership}/>}
-            {b.sale.ticket > 0 && <StBridge label="티켓 판매" value={-b.sale.ticket}/>}
-            {b.sale.deposit > 0 && <StBridge label="예약금 수령" value={-b.sale.deposit}/>}
-            {b.use.membership > 0 && <StBridge label="정액권 소진" value={b.use.membership} plus/>}
-            {b.use.ticket > 0 && <StBridge label="티켓 소진" value={b.use.ticket} plus/>}
-            {b.use.deposit > 0 && <StBridge label="예약금 사용" value={b.use.deposit} plus/>}
-            {b.use.point > 0 && <StBridge label="포인트 사용" value={b.use.point} plus/>}
-            <div style={{height:1, background:C_BORDER, margin:'4px 0'}}/>
-            <StBridge label="시술 금액" value={b.service} strong/>
-          </div>
-          <div style={{marginTop:8, fontSize:11, color:C_MUTED, lineHeight:1.4}}>
-            판 날과 쓰는 날이 달라서 차이가 납니다. 소진 {stWon(used)}원, 판매 {stWon(sale)}원.
-          </div>
+        <div style={{overflowX:'auto'}}>
+          <table style={{width:'100%', borderCollapse:'collapse', minWidth:980}}>
+            <thead>
+              <tr>
+                <th rowSpan={2} style={{...stMxTh, textAlign:'left', position:'sticky', left:0, zIndex:1}}>구분</th>
+                <th colSpan={2} style={stMxTh}>영수증 발행</th>
+                <th colSpan={2} style={stMxTh}>영수증 미발행</th>
+                {headNums.slice(4).map(h => <th key={h} rowSpan={2} style={{...stMxTh, ...(h.indexOf('합계') === 0 ? {color:C_BLUE} : {})}}>{h}</th>)}
+              </tr>
+              <tr>
+                {headNums.slice(0, 4).map((h, i) => <th key={h + i} style={stMxTh}>{h}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {storeRows.map(r => (
+                <tr key={r.label} style={{background: r.total ? C_BLUE_SOFT : r.sub ? '#F8FAFC' : C_SURFACE}}>
+                  <td style={{...stMxTd, textAlign:'left', position:'sticky', left:0, background: r.total ? C_BLUE_SOFT : r.sub ? '#F8FAFC' : C_SURFACE, fontWeight:800, paddingLeft: r.pad ? 22 : 10}}>
+                    {r.label}
+                  </td>
+                  {r.nums.map((n, i) => (
+                    <td key={i} style={{...stMxTd, fontWeight: i === r.nums.length - 1 || r.total ? 800 : 700, color: n < 0 ? '#DC2626' : (i === r.nums.length - 1 ? C_BLUE : C_INK)}}>
+                      {n ? (n < 0 ? '−' : '') + stWon(Math.abs(n)) : <span style={{color:'#E2E8F0'}}>0</span>}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      <div style={stCard}>
-        <div style={stTitle}>담당자 순위</div>
-        <div style={{display:'flex', flexDirection:'column', gap:8, marginTop:12}}>
-          {rank.map(d => (
-            <div key={d.id} style={{display:'grid', gridTemplateColumns:'92px 1fr 110px', gap:8, alignItems:'center'}}>
-              <div style={{display:'flex', alignItems:'center', gap:6, minWidth:0}}>
-                <span style={{width:8, height:8, borderRadius:'50%', background:d.color, flexShrink:0}}/>
-                <span style={{fontSize:12.5, fontWeight:700, color:C_INK}}>{d.name}</span>
-              </div>
-              <div style={{height:8, borderRadius:4, background:'#F1F5F9'}}>
-                <div style={{height:'100%', width:`${d.v / maxRank * 100}%`, borderRadius:4, background:d.color}}/>
-              </div>
-              <div style={{textAlign:'right', fontSize:12, fontWeight:800, color:C_INK, fontVariantNumeric:'tabular-nums'}}>
-                {stWon(d.v)}원
-                <span style={{display:'block', fontSize:10.5, fontWeight:600, color:C_MUTED}}>{d.customers}명</span>
-              </div>
-            </div>
-          ))}
+      <div style={{...stCard, padding:0, overflow:'hidden'}}>
+        <div style={{padding:'12px 14px', borderBottom:`1px solid ${C_BORDER}`}}>
+          <div style={stTitle}>담당자별 매출</div>
+          <div style={{fontSize:11.5, color:C_MUTED, marginTop:3}}>대체금액은 마감 합계에 넣지 않습니다. 정산매출에서 뺍니다.</div>
+        </div>
+        <div style={{overflowX:'auto'}}>
+          <table style={{width:'100%', borderCollapse:'collapse', minWidth:1180}}>
+            <thead>
+              <tr>
+                <th rowSpan={2} style={{...stMxTh, textAlign:'left', position:'sticky', left:0, zIndex:1}}>담당자</th>
+                <th colSpan={7} style={stMxTh}>시술</th>
+                <th colSpan={6} style={stMxTh}>판매</th>
+                <th rowSpan={2} style={stMxTh}>총합계</th>
+                <th rowSpan={2} style={stMxTh}>대체금액</th>
+                <th rowSpan={2} style={{...stMxTh, color:C_BLUE}}>정산매출</th>
+              </tr>
+              <tr>
+                {['현금','통장','카드','상품권','네이버','소진','합계','현금','통장','카드','상품권','네이버','합계'].map((h, i) => (
+                  <th key={h + i} style={{...stMxTh, color: h === '합계' ? C_BLUE : '#5C6B84'}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {desRows.map(d => (
+                <tr key={d.id}>
+                  <td style={{...stMxTd, textAlign:'left', position:'sticky', left:0, background:C_SURFACE, fontWeight:800}}>
+                    <span style={{display:'inline-flex', alignItems:'center', gap:6}}>
+                      <span style={{width:8, height:8, borderRadius:'50%', background:d.color}}/>
+                      {d.name}
+                      <span style={{fontSize:10.5, color:C_MUTED, fontWeight:600}}>{d.role}</span>
+                    </span>
+                  </td>
+                  {d.svc.concat(d.prod, [d.sum, d.subAmt, d.settle]).map((n, i) => (
+                    <td key={i} style={{...stMxTd, fontWeight: i === 6 || i === 12 || i >= 13 ? 800 : 700, color: i === 15 ? C_BLUE : C_INK}}>
+                      {n ? stWon(n) : <span style={{color:'#E2E8F0'}}>0</span>}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+              <tr style={{background:C_BLUE_SOFT}}>
+                <td style={{...stMxTd, textAlign:'left', position:'sticky', left:0, background:C_BLUE_SOFT, fontWeight:800, color:C_BLUE}}>합계</td>
+                {desFoot.svc.concat(desFoot.prod, [desFoot.sum, desFoot.subAmt, desFoot.settle]).map((n, i) => (
+                  <td key={i} style={{...stMxTd, fontWeight:800, color:C_BLUE}}>{n ? stWon(n) : <span style={{color:'#BFDBFE'}}>0</span>}</td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
   );
 }
 
-function StBridge({ label, value, strong, plus }) {
-  const show = value < 0 ? `−${stWon(-value)}` : plus ? `+${stWon(value)}` : stWon(value);
-  return (
-    <div style={{display:'flex', justifyContent:'space-between', gap:8, fontSize: strong ? 13 : 12}}>
-      <span style={{color: strong ? C_INK : C_MUTED, fontWeight: strong ? 800 : 600}}>{label}</span>
-      <span style={{
-        fontWeight:800, fontVariantNumeric:'tabular-nums',
-        color: value < 0 ? '#DC2626' : plus ? '#059669' : C_INK,
-      }}>{show}</span>
-    </div>
-  );
-}
 
 function StDesigner({ byDes, basis }) {
   const rows = ST_DES.map(d => ({ ...d, b: byDes[d.id] })).filter(d => d.b.pay > 0 || d.b.service > 0);
@@ -574,6 +714,8 @@ const stSelect = {
 };
 const stCard = { background:C_SURFACE, border:`1px solid ${C_BORDER}`, borderRadius:12, padding:'14px 16px' };
 const stTitle = { fontSize:13.5, fontWeight:800, color:C_INK };
+const stMxTh = { padding:'6px 8px', fontSize:10.5, fontWeight:700, color:'#5C6B84', textAlign:'center', whiteSpace:'nowrap', background:'#F8FAFC', borderBottom:`1px solid ${C_BORDER}` };
+const stMxTd = { padding:'7px 8px', fontSize:11, fontWeight:700, textAlign:'right', fontVariantNumeric:'tabular-nums', whiteSpace:'nowrap', color:C_INK, borderTop:`1px solid ${C_BORDER}` };
 const stTh = { padding:'8px 10px', fontSize:11, fontWeight:700, color:'#5C6B84', whiteSpace:'nowrap' };
 const stTd = { padding:'9px 10px', fontSize:12, fontWeight:700, color:C_INK, textAlign:'right', fontVariantNumeric:'tabular-nums', whiteSpace:'nowrap' };
 
