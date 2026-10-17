@@ -65,7 +65,7 @@ const SETTINGS_SUB = [
 const ANALYTICS_SUB = [
   { id:'analytics-ledger',    label:'매출내역' },
   { id:'analytics-dashboard', label:'분석 대시보드' },
-  { id:'analytics-sales',     label:'매출 분석' },
+  { id:'analytics-sales',     label:'결산' },
   { id:'analytics-customer',  label:'고객 분석' },
   { id:'analytics-terminal',  label:'단말기 설정' },
 ];
@@ -91,7 +91,6 @@ const STUB_PAGES = {
   'mkt-revisit':          { crumbs:['홈','마케팅','재방문율'],          title:'재방문율',            desc:'디자이너·시술별 재방문율과 이탈 추이를 분석합니다.' },
   'store':                { crumbs:['홈','스토어'],           title:'스토어',              desc:'제품 재고, 발주, 매장 물품 관리 기능이 들어갑니다.' },
   'analytics-dashboard':  { crumbs:['홈','분석','분석 대시보드'],  title:'분석 대시보드',   desc:'매출·객수·시술별 깊은 통계와 리포트를 제공합니다.' },
-  'analytics-sales':      { crumbs:['홈','분석','매출 분석'],      title:'매출 분석',       desc:'디자이너별·시술별·시간대별 매출 심화 분석을 제공합니다.' },
   'analytics-customer':   { crumbs:['홈','분석','고객 분석'],      title:'고객 분석',       desc:'재방문율, 이탈률, 채널 성과 등 고객 행동 분석을 제공합니다.' },
   'analytics-terminal':   { crumbs:['홈','분석','단말기 설정'],    title:'단말기 설정',     desc:'카드/POS 단말기 연동을 설정합니다.' },
   'settings-payroll':     { crumbs:['홈','설정','실시간 급여정산'], title:'실시간 급여정산', desc:'디자이너별 매출·수수료를 실시간으로 정산합니다.' },
@@ -2463,6 +2462,7 @@ function VariantC() {
           if (page === 'closing' && ClosingCmp) return <ClosingCmp/>;
           if (page === 'staff-sub' && window.C_StaffSubPage) return <window.C_StaffSubPage/>;
           if (page === 'analytics-ledger' && window.C_SalesLedgerPage) return <window.C_SalesLedgerPage/>;
+          if (page === 'analytics-sales' && window.C_SettlePage) return <window.C_SettlePage/>;
           const OpsCmp = window.C_OpsPage;
           const SmsCmp = window.C_SmsPage;
           if (page === 'settings-menu' && SettingsMenu) return <SettingsMenu/>;
