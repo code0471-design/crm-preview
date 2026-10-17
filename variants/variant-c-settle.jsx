@@ -300,7 +300,7 @@ function C_SettlePage() {
           {view === 'menu' && <StMenu b={b} basis={basis}/>}
           {view === 'visit' && <StVisit rows={rows} basis={basis}/>}
           {view === 'calendar' && <StCalendar rows={rows} basis={basis} preset={preset}/>}
-          {view === 'trend' && <StTrend rows={ST_ROWS.filter(r => designer === 'all' || r.designer === designer)} basis={basis}/>}
+          {view === 'trend' && <StTrend rows={ST_ROWS.filter(r => designer === 'all' || r.designer === designer)} basis={basis} designer={designer}/>}
         </div>
       </div>
     </div>
@@ -801,96 +801,208 @@ function StCalendar({ rows, basis, preset }) {
   );
 }
 
-const ST_TREND_EARLY = [
-  { m:3, label:'3월', pay:4820000, service:4510000 },
-  { m:4, label:'4월', pay:5100000, service:4680000 },
-  { m:5, label:'5월', pay:5460000, service:5020000 },
-  { m:6, label:'6월', pay:4980000, service:4730000 },
-  { m:7, label:'7월', pay:5720000, service:5310000 },
-  { m:8, label:'8월', pay:5340000, service:4890000 },
-];
-function StTrend({ rows, basis }) {
-  const share = rows.length && ST_ROWS.length ? rows.length / ST_ROWS.length : 1;
-  const early = ST_TREND_EARLY.map(m => ({ ...m, v: Math.round((basis === 'pay' ? m.pay : m.service) * (rows.length === ST_ROWS.length ? 1 : share)) }));
-  const late = [9, 10].map(m => ({
-    m, label: `${m}월`,
-    v: rows.filter(r => r.m === m).reduce((a, r) => a + stRowAmount(r, basis), 0),
-  }));
-  const months = early.concat(late);
-  const max = Math.max(1, ...months.map(m => m.v));
+const ST_TREND_EARLY = {
+  3:{ pay:4820000, service:4510000 },
+  4:{ pay:5100000, service:4680000 },
+  5:{ pay:5460000, service:5020000 },
+  6:{ pay:4980000, service:4730000 },
+  7:{ pay:5720000, service:5310000 },
+  8:{ pay:5340000, service:4890000 },
+};
+const ST_TREND_SHARE = { moon:0.28, lee:0.18, jung:0.16, kims:0.12, park:0.11, leehj:0.09, kimjy:0.06 };
+function StTrend({ rows, basis, designer }) {
+  const months = [3,4,5,6,7,8,9,10].map(m => {
+    const by = {};
+    ST_DES.forEach(d => {
+      if (designer !== 'all' && d.id !== designer) { by[d.id] = 0; return; }
+      if (m >= 9) by[d.id] = rows.filter(r => r.m === m && r.designer === d.id).reduce((a, r) => a + stRowAmount(r, basis), 0);
+      else by[d.id] = Math.round((basis === 'pay' ? ST_TREND_EARLY[m].pay : ST_TREND_EARLY[m].service) * ST_TREND_SHARE[d.id]);
+    });
+    return { m, label:`${m}월`, by, total: Object.values(by).reduce((a, n) => a + n, 0) };
+  });
+  const max = Math.max(1, ...months.map(x => x.total));
+  const people = ST_DES.filter(d => designer === 'all' || d.id === designer);
   return (
-    <div style={stCard}>
-      <div style={stTitle}>월별 추이</div>
-      <div style={{fontSize:11.5, color:C_MUTED, marginTop:3, marginBottom:14}}>
-        {basis === 'pay' ? '결제 금액' : '시술 금액'} 기준입니다. 9월과 10월은 이 화면의 매출이고, 그 전은 같은 기준으로 잡은 앞달입니다.
+    <div style={{display:'flex', flexDirection:'column', gap:12}}>
+      <div style={stCard}>
+        <div style={stTitle}>월별 추이</div>
+        <div style={{fontSize:11.5, color:C_MUTED, marginTop:3, marginBottom:10}}>
+          {basis === 'pay' ? '결제 금액' : '시술 금액'} · 담당자별로 쌓았습니다. 9월과 10월은 이 화면의 매출입니다.
+        </div>
+        <div style={{display:'flex', flexWrap:'wrap', gap:10, marginBottom:12}}>
+          {people.map(d => (
+            <span key={d.id} style={{display:'inline-flex', alignItems:'center', gap:5, fontSize:11.5, fontWeight:700, color:C_INK}}>
+              <span style={{width:8, height:8, borderRadius:2, background:d.color}}/>{d.name}
+            </span>
+          ))}
+        </div>
+        <div style={{display:'flex', alignItems:'flex-end', gap:8, height:230}}>
+          {months.map(m => (
+            <div key={m.m} style={{flex:1, minWidth:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'flex-end', height:'100%'}}>
+              <div style={{fontSize:10.5, fontWeight:800, color:C_INK, fontVariantNumeric:'tabular-nums', marginBottom:4}}>{stWon(m.total)}</div>
+              <div style={{width:'72%', maxWidth:42, display:'flex', flexDirection:'column-reverse', borderRadius:8, overflow:'hidden', background:'#F1F5F9'}}>
+                {people.map(d => (
+                  <div key={d.id} style={{height:Math.round((m.by[d.id] || 0) / max * 160), background:d.color}}/>
+                ))}
+              </div>
+              <div style={{marginTop:8, fontSize:12, fontWeight:700, color:C_MUTED}}>{m.label}</div>
+            </div>
+          ))}
+        </div>
       </div>
-      <div style={{display:'flex', alignItems:'flex-end', gap:10, height:220}}>
-        {months.map(m => (
-          <div key={m.m} style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', height:'100%', justifyContent:'flex-end'}}>
-            <div style={{fontSize:11, fontWeight:800, color:C_INK, fontVariantNumeric:'tabular-nums', marginBottom:6}}>{stWon(m.v)}</div>
-            <div style={{width:'100%', maxWidth:48, height:`${Math.max(8, m.v / max * 160)}px`, borderRadius:'8px 8px 4px 4px', background: m.m >= 9 ? C_BLUE : '#BFDBFE'}}/>
-            <div style={{marginTop:8, fontSize:12, fontWeight:700, color:C_MUTED}}>{m.label}</div>
-          </div>
-        ))}
+      <div style={{...stCard, padding:0, overflow:'hidden'}}>
+        <div style={{overflowX:'auto'}}>
+          <table style={{width:'100%', borderCollapse:'collapse', minWidth:860}}>
+            <thead>
+              <tr>
+                <th style={{...stMxTh, textAlign:'left'}}>담당자</th>
+                {months.map(m => <th key={m.m} style={stMxTh}>{m.label}</th>)}
+                <th style={{...stMxTh, color:C_BLUE}}>합계</th>
+              </tr>
+            </thead>
+            <tbody>
+              {people.map(d => {
+                const sum = months.reduce((a, m) => a + m.by[d.id], 0);
+                return (
+                  <tr key={d.id}>
+                    <td style={{...stMxTd, textAlign:'left', fontWeight:800}}>
+                      <span style={{display:'inline-flex', alignItems:'center', gap:6}}>
+                        <span style={{width:8, height:8, borderRadius:'50%', background:d.color}}/>{d.name}
+                      </span>
+                    </td>
+                    {months.map(m => <td key={m.m} style={stMxTd}>{m.by[d.id] ? stWon(m.by[d.id]) : <span style={{color:'#E2E8F0'}}>0</span>}</td>)}
+                    <td style={{...stMxTd, fontWeight:800, color:C_BLUE}}>{stWon(sum)}</td>
+                  </tr>
+                );
+              })}
+              <tr style={{background:C_BLUE_SOFT}}>
+                <td style={{...stMxTd, textAlign:'left', fontWeight:800, color:C_BLUE, background:C_BLUE_SOFT}}>합계</td>
+                {months.map(m => <td key={m.m} style={{...stMxTd, fontWeight:800, color:C_BLUE}}>{stWon(m.total)}</td>)}
+                <td style={{...stMxTd, fontWeight:800, color:C_BLUE}}>{stWon(months.reduce((a, m) => a + m.total, 0))}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
 }
 
-const PP_MEMBER = [
-  { id:'moon', buyers:14, count:6, sales:800000, used:360000, days:41 },
-  { id:'lee', buyers:9, count:4, sales:420000, used:180000, days:36 },
-  { id:'jung', buyers:7, count:3, sales:300000, used:90000, days:52 },
-  { id:'kims', buyers:5, count:2, sales:180000, used:60000, days:29 },
-  { id:'park', buyers:8, count:3, sales:400000, used:150000, days:44 },
-  { id:'leehj', buyers:4, count:2, sales:150000, used:40000, days:33 },
-  { id:'kimjy', buyers:2, count:1, sales:80000, used:0, days:0 },
+const PP_GOODS = {
+  membership: [
+    { id:'a', name:'A정액권' },
+    { id:'b', name:'B정액권' },
+    { id:'c', name:'C정액권' },
+  ],
+  ticket: [
+    { id:'t1', name:'클리닉 5회' },
+    { id:'t2', name:'케어 10회' },
+  ],
+};
+const PP_RANGE = {
+  month:['2026-10-01','2026-10-17'],
+  last:['2026-09-01','2026-09-30'],
+  year:['2026-01-01','2026-10-17'],
+};
+const PP_HOLD = [
+  { kind:'membership', product:'a', designer:'moon', name:'박서연', phone:'010-2221-3345', bought:'2026-10-02', sales:300000, used:120000, days:11 },
+  { kind:'membership', product:'a', designer:'lee', name:'조유진', phone:'010-4182-2201', bought:'2026-10-05', sales:300000, used:60000, days:9 },
+  { kind:'membership', product:'a', designer:'jung', name:'한지민', phone:'010-9021-1184', bought:'2026-09-20', sales:300000, used:300000, days:22 },
+  { kind:'membership', product:'a', designer:'kims', name:'윤지원', phone:'010-6671-3308', bought:'2026-09-08', sales:300000, used:210000, days:18 },
+  { kind:'membership', product:'a', designer:'park', name:'임채원', phone:'010-7712-9044', bought:'2026-08-15', sales:300000, used:300000, days:25 },
+  { kind:'membership', product:'a', designer:'kimjy', name:'오세훈', phone:'010-2208-6612', bought:'2026-10-11', sales:300000, used:0, days:0 },
+  { kind:'membership', product:'b', designer:'moon', name:'강수현', phone:'010-3344-2211', bought:'2026-09-18', sales:500000, used:280000, days:42 },
+  { kind:'membership', product:'b', designer:'lee', name:'이하늘', phone:'010-5551-9090', bought:'2026-10-09', sales:500000, used:50000, days:6 },
+  { kind:'membership', product:'b', designer:'jung', name:'정예린', phone:'010-8188-2741', bought:'2026-07-02', sales:500000, used:410000, days:55 },
+  { kind:'membership', product:'b', designer:'park', name:'최민서', phone:'010-1414-8088', bought:'2026-10-01', sales:500000, used:100000, days:14 },
+  { kind:'membership', product:'b', designer:'leehj', name:'홍지수', phone:'010-3636-1919', bought:'2026-09-25', sales:500000, used:190000, days:38 },
+  { kind:'membership', product:'c', designer:'moon', name:'김선일', phone:'010-9090-1212', bought:'2026-06-12', sales:1000000, used:640000, days:70 },
+  { kind:'membership', product:'c', designer:'lee', name:'시다은', phone:'010-4545-7878', bought:'2026-09-03', sales:1000000, used:220000, days:48 },
+  { kind:'membership', product:'c', designer:'kims', name:'문태호', phone:'010-6262-3030', bought:'2026-10-14', sales:1000000, used:0, days:0 },
+  { kind:'membership', product:'c', designer:'jung', name:'안지호', phone:'010-1717-4545', bought:'2026-08-20', sales:1000000, used:480000, days:61 },
+  { kind:'membership', product:'c', designer:'park', name:'박지훈', phone:'010-2828-6161', bought:'2026-09-28', sales:1000000, used:150000, days:16 },
+  { kind:'ticket', product:'t1', designer:'moon', name:'박서연', phone:'010-2221-3345', bought:'2026-10-04', sales:200000, used:80000, days:10 },
+  { kind:'ticket', product:'t1', designer:'jung', name:'한지민', phone:'010-9021-1184', bought:'2026-09-15', sales:200000, used:200000, days:28 },
+  { kind:'ticket', product:'t1', designer:'park', name:'임채원', phone:'010-7712-9044', bought:'2026-10-07', sales:200000, used:40000, days:8 },
+  { kind:'ticket', product:'t1', designer:'lee', name:'조유진', phone:'010-4182-2201', bought:'2026-08-02', sales:200000, used:160000, days:30 },
+  { kind:'ticket', product:'t1', designer:'leehj', name:'나예지', phone:'010-5050-2323', bought:'2026-09-11', sales:200000, used:120000, days:22 },
+  { kind:'ticket', product:'t2', designer:'moon', name:'강수현', phone:'010-3344-2211', bought:'2026-09-02', sales:350000, used:140000, days:24 },
+  { kind:'ticket', product:'t2', designer:'jung', name:'정예린', phone:'010-8188-2741', bought:'2026-10-06', sales:350000, used:35000, days:7 },
+  { kind:'ticket', product:'t2', designer:'kims', name:'윤지원', phone:'010-6671-3308', bought:'2026-07-19', sales:350000, used:280000, days:40 },
+  { kind:'ticket', product:'t2', designer:'park', name:'최민서', phone:'010-1414-8088', bought:'2026-09-22', sales:350000, used:175000, days:26 },
+  { kind:'ticket', product:'t2', designer:'lee', name:'이하늘', phone:'010-5551-9090', bought:'2026-10-12', sales:350000, used:0, days:0 },
+  { kind:'ticket', product:'t2', designer:'kimjy', name:'오세훈', phone:'010-2208-6612', bought:'2026-06-03', sales:350000, used:350000, days:45 },
 ];
-const PP_TICKET = [
-  { id:'moon', buyers:6, count:8, sales:240000, used:90000, days:21 },
-  { id:'lee', buyers:5, count:6, sales:180000, used:70000, days:18 },
-  { id:'jung', buyers:8, count:9, sales:320000, used:160000, days:24 },
-  { id:'kims', buyers:3, count:3, sales:90000, used:30000, days:16 },
-  { id:'park', buyers:7, count:10, sales:280000, used:210000, days:27 },
-  { id:'leehj', buyers:4, count:5, sales:150000, used:50000, days:19 },
-  { id:'kimjy', buyers:1, count:1, sales:40000, used:0, days:0 },
-];
+function ppIn(date, preset) {
+  const [from, to] = PP_RANGE[preset];
+  return date >= from && date <= to;
+}
+function ppAvg(list) {
+  const used = list.filter(r => r.days > 0);
+  if (!used.length) return 0;
+  return Math.round(used.reduce((a, r) => a + r.days, 0) / used.length);
+}
+function ppSum(list) {
+  const sales = list.reduce((a, r) => a + r.sales, 0);
+  const used = list.reduce((a, r) => a + r.used, 0);
+  return { buyers: new Set(list.map(r => r.name)).size, count: list.length, sales, used, balance: sales - used, days: ppAvg(list) };
+}
 
 function C_PrepaidPage() {
   const [tab, setTab] = React.useState('membership');
-  const rows = (tab === 'membership' ? PP_MEMBER : PP_TICKET).map(r => ({ ...r, des: ST_DES.find(d => d.id === r.id) }));
-  const sum = rows.reduce((a, r) => ({
-    buyers: a.buyers + r.buyers, count: a.count + r.count, sales: a.sales + r.sales, used: a.used + r.used,
-    dayWeight: a.dayWeight + (r.days ? r.days * r.buyers : 0), dayBuyers: a.dayBuyers + (r.days ? r.buyers : 0),
-  }), { buyers:0, count:0, sales:0, used:0, dayWeight:0, dayBuyers:0 });
-  const avgDays = sum.dayBuyers ? Math.round(sum.dayWeight / sum.dayBuyers) : 0;
+  const [preset, setPreset] = React.useState('month');
+  const [who, setWho] = React.useState('all');
+  const [goods, setGoods] = React.useState('all');
+  const goodsList = PP_GOODS[tab];
+  const periodRows = PP_HOLD.filter(r => r.kind === tab && ppIn(r.bought, preset));
+  const shown = periodRows.filter(r => (who === 'all' || r.designer === who) && (goods === 'all' || r.product === goods));
+  const sum = ppSum(shown);
   const name = tab === 'membership' ? '정액권' : '티켓';
+  const byGoods = goodsList.map(g => ({ ...g, ...ppSum(periodRows.filter(r => r.product === g.id)) })).filter(g => g.count);
+  const byDes = ST_DES.map(d => ({ ...d, ...ppSum(periodRows.filter(r => r.designer === d.id)) })).filter(d => d.count);
+  const range = PP_RANGE[preset];
+  const pickWho = (id) => { setWho(who === id ? 'all' : id); };
+  const pickGoods = (id) => { setGoods(goods === id ? 'all' : id); };
   return (
     <div style={{flex:1, display:'flex', flexDirection:'column', minWidth:0, overflow:'hidden', background:C_BG}}>
       <div style={{width:'100%', flex:1, display:'flex', flexDirection:'column', minHeight:0}}>
-        <div style={{padding:'14px 20px 0'}}>
+        <div style={{
+          display:'flex', alignItems:'center', gap:8, flexWrap:'wrap',
+          padding:'10px 14px', background:C_SURFACE, borderBottom:`1px solid ${C_BORDER}`,
+        }}>
+          <span style={{fontSize:12.5, color:C_MUTED, fontWeight:600}}>기간</span>
+          <div style={stDate}>{range[0].replace(/-/g,'.')}</div>
+          <span style={{color:C_MUTED, fontSize:12}}>~</span>
+          <div style={stDate}>{range[1].replace(/-/g,'.')}</div>
+          {[{id:'month', label:'이번 달'}, {id:'last', label:'지난달'}, {id:'year', label:'올해'}].map(p => (
+            <button key={p.id} onClick={() => { setPreset(p.id); setWho('all'); setGoods('all'); }} style={{
+              padding:'6px 11px', fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit',
+              border:`1px solid ${preset === p.id ? C_BLUE : C_BORDER}`, borderRadius:14,
+              background: preset === p.id ? C_BLUE_SOFT : C_SURFACE, color: preset === p.id ? C_BLUE : C_MUTED,
+            }}>{p.label}</button>
+          ))}
+          <div style={{flex:1}}/>
+          {[{id:'membership', label:'정액권'}, {id:'ticket', label:'티켓'}].map(t => (
+            <button key={t.id} onClick={() => { setTab(t.id); setWho('all'); setGoods('all'); }} style={{
+              padding:'7px 14px', fontSize:12.5, fontWeight:700, cursor:'pointer', fontFamily:'inherit',
+              border:'none', borderRadius:8,
+              background: tab === t.id ? C_BLUE : C_SURFACE, color: tab === t.id ? '#fff' : C_MUTED,
+              boxShadow: tab === t.id ? 'none' : `inset 0 0 0 1px ${C_BORDER}`,
+            }}>{t.label}</button>
+          ))}
+        </div>
+        <div style={{flex:1, overflow:'auto', padding:'16px 20px 28px'}}>
           <div style={{fontSize:12, color:C_MUTED, marginBottom:12}}>
             홈 <span style={{margin:'0 6px'}}>›</span> 분석 <span style={{margin:'0 6px'}}>›</span>
             <span style={{color:C_INK, fontWeight:700}}>정액권 분석</span>
           </div>
-          <div style={{display:'flex', gap:4, marginBottom:14}}>
-            {[{id:'membership', label:'정액권'}, {id:'ticket', label:'티켓'}].map(t => (
-              <button key={t.id} onClick={() => setTab(t.id)} style={{
-                padding:'7px 14px', fontSize:12.5, fontWeight:700, cursor:'pointer', fontFamily:'inherit',
-                border:'none', borderRadius:8,
-                background: tab === t.id ? C_BLUE : C_SURFACE, color: tab === t.id ? '#fff' : C_MUTED,
-                boxShadow: tab === t.id ? 'none' : `inset 0 0 0 1px ${C_BORDER}`,
-              }}>{t.label}</button>
-            ))}
-          </div>
-        </div>
-        <div style={{flex:1, overflow:'auto', padding:'0 20px 28px'}}>
-          <div style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:10, marginBottom:12}}>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:10, marginBottom:12}}>
             {[
-              { label:'구매 고객', value:`${sum.buyers}명`, sub:`${sum.count}건 판매` },
-              { label:'판매 금액', value:`${stWon(sum.sales)}원`, sub:`객단 ${stWon(sum.buyers ? Math.round(sum.sales / sum.buyers) : 0)}원` },
-              { label:'소진 금액', value:`${stWon(sum.used)}원`, sub:`소진율 ${sum.sales ? Math.round(sum.used / sum.sales * 100) : 0}%` },
-              { label:'평균 소진기간', value: avgDays ? `${avgDays}일` : '-', sub:'구매 후 쓰는 데 걸린 날' },
+              { label:'구매 고객', value:`${sum.buyers}명`, sub:`${sum.count}건` },
+              { label:'판매 금액', value:`${stWon(sum.sales)}원`, sub:'기간 안 구매' },
+              { label:'소진 금액', value:`${stWon(sum.used)}원`, sub: sum.sales ? `소진율 ${Math.round(sum.used / sum.sales * 100)}%` : '-' },
+              { label:'잔액', value:`${stWon(sum.balance)}원`, sub:'아직 안 쓴 금액' },
+              { label:'평균 소진기간', value: sum.days ? `${sum.days}일` : '-', sub:'쓰기 시작한 고객' },
             ].map(k => (
               <div key={k.label} style={stCard}>
                 <div style={{fontSize:11.5, color:C_MUTED, fontWeight:600}}>{k.label}</div>
@@ -899,42 +1011,100 @@ function C_PrepaidPage() {
               </div>
             ))}
           </div>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1.15fr', gap:10, marginBottom:12}}>
+            <PpGroup title={`${name}별`} hint="줄을 누르면 아래 고객만 봅니다." cols={['이름','고객','판매','소진','잔액','평균 소진기간']}
+              rows={byGoods} active={goods} onPick={pickGoods}
+              cell={(r) => [r.name, `${r.buyers}명`, stWon(r.sales), stWon(r.used), stWon(r.balance), r.days ? `${r.days}일` : '-']}/>
+            <PpGroup title="담당자별" hint="매출과 잔액. 줄을 누르면 그 담당자 고객만 봅니다." cols={['담당자','고객','판매','소진','잔액','평균 소진기간']}
+              rows={byDes} active={who} onPick={pickWho} dot
+              cell={(r) => [r.name, `${r.buyers}명`, stWon(r.sales), stWon(r.used), stWon(r.balance), r.days ? `${r.days}일` : '-']}/>
+          </div>
           <div style={{...stCard, padding:0, overflow:'hidden'}}>
-            <div style={{padding:'12px 14px', borderBottom:`1px solid ${C_BORDER}`}}>
-              <div style={stTitle}>담당자별 {name}</div>
-              <div style={{fontSize:11.5, color:C_MUTED, marginTop:3}}>구매 고객수와 평균 소진기간은 그 담당자에게 산 고객 기준입니다.</div>
+            <div style={{padding:'12px 14px', borderBottom:`1px solid ${C_BORDER}`, display:'flex', alignItems:'center', gap:8}}>
+              <div>
+                <div style={stTitle}>고객 목록</div>
+                <div style={{fontSize:11.5, color:C_MUTED, marginTop:3}}>잔액은 판매에서 지금까지 쓴 금액을 뺀 값입니다.</div>
+              </div>
+              <div style={{flex:1}}/>
+              {who !== 'all' && <button onClick={() => setWho('all')} style={stChip}>{ST_DES.find(d => d.id === who).name} ×</button>}
+              {goods !== 'all' && <button onClick={() => setGoods('all')} style={stChip}>{(goodsList.find(g => g.id === goods) || {}).name} ×</button>}
             </div>
-            <table style={{width:'100%', borderCollapse:'collapse'}}>
-              <thead>
-                <tr>
-                  {['담당자','구매 고객','판매 건수','판매 금액','평균 구매','소진 금액','소진율','평균 소진기간'].map((h, i) => (
-                    <th key={h} style={{...stMxTh, textAlign: i === 0 ? 'left' : 'right'}}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(r => (
-                  <tr key={r.id}>
-                    <td style={{...stMxTd, textAlign:'left', fontWeight:800}}>
-                      <span style={{display:'inline-flex', alignItems:'center', gap:6}}>
-                        <span style={{width:8, height:8, borderRadius:'50%', background:r.des.color}}/>
-                        {r.des.name}
-                      </span>
-                    </td>
-                    <td style={stMxTd}>{r.buyers}명</td>
-                    <td style={stMxTd}>{r.count}건</td>
-                    <td style={stMxTd}>{stWon(r.sales)}</td>
-                    <td style={stMxTd}>{stWon(Math.round(r.sales / r.count))}</td>
-                    <td style={stMxTd}>{stWon(r.used)}</td>
-                    <td style={stMxTd}>{r.sales ? Math.round(r.used / r.sales * 100) : 0}%</td>
-                    <td style={{...stMxTd, fontWeight:800, color:C_BLUE}}>{r.days ? `${r.days}일` : '-'}</td>
+            <div style={{overflowX:'auto'}}>
+              <table style={{width:'100%', borderCollapse:'collapse', minWidth:920}}>
+                <thead>
+                  <tr>
+                    {['고객','연락처',name,'담당자','구매일','판매','소진','잔액','소진기간'].map((h, i) => (
+                      <th key={h} style={{...stMxTh, textAlign: i < 5 ? 'left' : 'right'}}>{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {shown.length === 0 && (
+                    <tr><td colSpan={9} style={{...stMxTd, textAlign:'center', color:C_MUTED, fontWeight:600}}>이 기간에 구매한 고객이 없습니다.</td></tr>
+                  )}
+                  {shown.map((r, i) => {
+                    const des = ST_DES.find(d => d.id === r.designer);
+                    const g = goodsList.find(x => x.id === r.product);
+                    return (
+                      <tr key={i}>
+                        <td style={{...stMxTd, textAlign:'left', fontWeight:800}}>{r.name}</td>
+                        <td style={{...stMxTd, textAlign:'left', color:C_MUTED}}>{r.phone}</td>
+                        <td style={{...stMxTd, textAlign:'left'}}>{g.name}</td>
+                        <td style={{...stMxTd, textAlign:'left'}}>
+                          <span style={{display:'inline-flex', alignItems:'center', gap:5}}>
+                            <span style={{width:7, height:7, borderRadius:'50%', background:des.color}}/>{des.name}
+                          </span>
+                        </td>
+                        <td style={{...stMxTd, textAlign:'left'}}>{r.bought.replace(/-/g,'.')}</td>
+                        <td style={stMxTd}>{stWon(r.sales)}</td>
+                        <td style={stMxTd}>{stWon(r.used)}</td>
+                        <td style={{...stMxTd, fontWeight:800}}>{stWon(r.sales - r.used)}</td>
+                        <td style={{...stMxTd, fontWeight:800, color:C_BLUE}}>{r.days ? `${r.days}일` : '-'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function PpGroup({ title, hint, cols, rows, active, onPick, cell, dot }) {
+  return (
+    <div style={{...stCard, padding:0, overflow:'hidden'}}>
+      <div style={{padding:'12px 14px', borderBottom:`1px solid ${C_BORDER}`}}>
+        <div style={stTitle}>{title}</div>
+        <div style={{fontSize:11.5, color:C_MUTED, marginTop:3}}>{hint}</div>
+      </div>
+      <table style={{width:'100%', borderCollapse:'collapse'}}>
+        <thead>
+          <tr>{cols.map((h, i) => <th key={h} style={{...stMxTh, textAlign: i === 0 ? 'left' : 'right'}}>{h}</th>)}</tr>
+        </thead>
+        <tbody>
+          {rows.map(r => {
+            const vals = cell(r);
+            const on = active === r.id;
+            return (
+              <tr key={r.id} onClick={() => onPick(r.id)} style={{cursor:'pointer', background: on ? C_BLUE_SOFT : 'transparent'}}>
+                <td style={{...stMxTd, textAlign:'left', fontWeight:800, background: on ? C_BLUE_SOFT : C_SURFACE}}>
+                  <span style={{display:'inline-flex', alignItems:'center', gap:6}}>
+                    {dot && <span style={{width:8, height:8, borderRadius:'50%', background:r.color}}/>}
+                    {vals[0]}
+                  </span>
+                </td>
+                {vals.slice(1).map((v, i) => (
+                  <td key={i} style={{...stMxTd, color: i === vals.length - 2 ? C_BLUE : C_INK, fontWeight: i >= vals.length - 3 ? 800 : 700}}>{v}</td>
+                ))}
+              </tr>
+            );
+          })}
+          {rows.length === 0 && <tr><td colSpan={cols.length} style={{...stMxTd, textAlign:'center', color:C_MUTED}}>없음</td></tr>}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -949,6 +1119,10 @@ const stSelect = {
   background:C_SURFACE, color:C_INK, fontSize:12, fontWeight:700, fontFamily:'inherit',
 };
 const stCard = { background:C_SURFACE, border:`1px solid ${C_BORDER}`, borderRadius:12, padding:'14px 16px' };
+const stChip = {
+  height:26, padding:'0 10px', borderRadius:13, border:`1px solid ${C_BLUE}`,
+  background:C_BLUE_SOFT, color:C_BLUE, fontSize:11.5, fontWeight:800, cursor:'pointer', fontFamily:'inherit',
+};
 const stTitle = { fontSize:13.5, fontWeight:800, color:C_INK };
 const stMxTh = { padding:'6px 8px', fontSize:10.5, fontWeight:700, color:'#5C6B84', textAlign:'center', whiteSpace:'nowrap', background:'#F8FAFC', borderBottom:`1px solid ${C_BORDER}` };
 const stMxTd = { padding:'7px 8px', fontSize:11, fontWeight:700, textAlign:'right', fontVariantNumeric:'tabular-nums', whiteSpace:'nowrap', color:C_INK, borderTop:`1px solid ${C_BORDER}` };
