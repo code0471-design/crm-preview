@@ -31,6 +31,7 @@ function RpChBadge({ ch }) {
 function C_MktReportPage() {
   const [period, setPeriod] = React.useState('this');
   const [win, setWin] = React.useState('14');
+  const [scope, setScope] = React.useState('all');
   const [tab, setTab] = React.useState('bulk');
   const [q, setQ] = React.useState('');
   const [detail, setDetail] = React.useState(null);
@@ -48,10 +49,10 @@ function C_MktReportPage() {
   });
 
   const done = bulkRows.filter(c => c.status === 'done');
-  const all = [...done, ...autoRows];
-  const sum = (key, arr = all) => arr.reduce((s, c) => s + (c[key] || 0), 0);
+  const pool = scope === 'bulk' ? done : scope === 'auto' ? autoRows : [...done, ...autoRows];
+  const sum = (key, arr = pool) => arr.reduce((s, c) => s + (c[key] || 0), 0);
   const sent = sum('sent'), ok = sum('ok') + sum('fallback'), cost = sum('cost');
-  const convBase = all.filter(c => c.conv);
+  const convBase = pool.filter(c => c.conv);
   const convOk = sum('ok', convBase) + sum('fallback', convBase);
   const booked = sum('booked'), visited = sum('visited'), revenue = sum('revenue');
 
@@ -89,7 +90,15 @@ function C_MktReportPage() {
             <span style={{fontSize:12, color:C_MUTED}}>이내</span>
           </div>
 
-          {/* KPI */}
+          <div style={{display:'flex', alignItems:'center', gap:10, marginBottom:-4}}>
+            <window.MktSeg value={scope} onChange={(id) => { setScope(id); if (id !== 'all') setTab(id); }} options={[
+              { id:'all', label:'전체' }, { id:'bulk', label:'단체' }, { id:'auto', label:'자동' },
+            ]}/>
+            <span style={{fontSize:12, color:C_MUTED}}>
+              {scope === 'all' ? '단체발송과 자동발송을 합산해요' : scope === 'bulk' ? '단체발송만 집계해요' : '자동발송만 집계해요'}
+            </span>
+          </div>
+          <div style={{fontSize:13, fontWeight:700, color:C_INK, marginBottom:-6}}>대시보드 요약</div>
           <div style={{display:'grid', gridTemplateColumns:'repeat(5, 1fr)', background:C_SURFACE, border:`1px solid ${C_BORDER}`, borderRadius:10, overflow:'hidden'}}>
             {[
               { l:'발송', v:sent.toLocaleString(), u:'건', sub:`성공 ${rpPct(ok, sent)}%` },
@@ -113,7 +122,7 @@ function C_MktReportPage() {
           </div>
 
           {/* 일별 차트 */}
-          {period === 'this' && <RpDailyChart/>}
+          {period === 'this' && <RpDailyChart scope={scope}/>}
 
           {/* 목록 */}
           <div style={{background:C_SURFACE, border:`1px solid ${C_BORDER}`, borderRadius:10, overflow:'hidden'}}>
@@ -121,7 +130,7 @@ function C_MktReportPage() {
               {[
                 { id:'bulk', label:'단체발송', n:bulkRows.length },
                 { id:'auto', label:'자동발송', n:autoRows.length },
-              ].map(t => {
+              ].filter(t => scope === 'all' || t.id === scope).map(t => {
                 const on = tab === t.id;
                 return (
                   <button key={t.id} onClick={() => setTab(t.id)} style={{
@@ -169,10 +178,11 @@ function C_MktReportPage() {
 }
 
 // ───── 일별 차트 ─────
-function RpDailyChart() {
+function RpDailyChart({ scope }) {
   const [hover, setHover] = React.useState(null);
   const H = 120;
-  const max = Math.max(...RP_DAILY.map(d => d.auto + d.bulk));
+  const part = (d) => (scope === 'bulk' ? 0 : d.auto) + (scope === 'auto' ? 0 : d.bulk);
+  const max = Math.max(1, ...RP_DAILY.map(part));
   const step = max > 500 ? 200 : 100;
   const top = Math.ceil(max / step) * step;
   const DOW = ['일','월','화','수','목','금','토'];
@@ -180,7 +190,7 @@ function RpDailyChart() {
     <div style={{background:C_SURFACE, border:`1px solid ${C_BORDER}`, borderRadius:10, padding:'14px 16px 12px'}}>
       <div style={{display:'flex', alignItems:'center', gap:14, marginBottom:12}}>
         <div style={{fontSize:13, fontWeight:700, color:C_INK, flex:1}}>일별 발송</div>
-        {[['자동발송', RP_AUTO_C], ['단체발송', RP_BULK_C]].map(([l, c]) => (
+        {[['자동발송', RP_AUTO_C, 'auto'], ['단체발송', RP_BULK_C, 'bulk']].filter(([, , id]) => scope === 'all' || scope === id).map(([l, c]) => (
           <span key={l} style={{fontSize:11.5, color:C_MUTED, display:'flex', alignItems:'center', gap:5}}>
             <span style={{width:9, height:9, borderRadius:2, background:c}}/>{l}
           </span>
@@ -196,7 +206,9 @@ function RpDailyChart() {
           </div>
           <div style={{display:'flex', alignItems:'flex-end', gap:6, height:H, position:'relative'}}>
             {RP_DAILY.map(d => {
-              const tot = d.auto + d.bulk;
+              const auto = scope === 'bulk' ? 0 : d.auto;
+              const bulk = scope === 'auto' ? 0 : d.bulk;
+              const tot = auto + bulk;
               const on = hover === d.d;
               return (
                 <div key={d.d} onMouseEnter={() => setHover(d.d)} onMouseLeave={() => setHover(null)}
@@ -207,11 +219,11 @@ function RpDailyChart() {
                       background:'#0B1425', color:'#fff', fontSize:11, padding:'6px 9px', borderRadius:6, whiteSpace:'nowrap', lineHeight:1.5,
                     }}>
                       <b>9/{d.d}({DOW[d.dow]})</b> · {tot.toLocaleString()}건<br/>
-                      자동 {d.auto} · 단체 {d.bulk}
+                      {scope === 'all' ? `자동 ${auto} · 단체 ${bulk}` : scope === 'auto' ? `자동 ${auto}` : `단체 ${bulk}`}
                     </div>
                   )}
-                  {d.bulk > 0 && <div style={{height:(d.bulk / top) * H, background:RP_BULK_C, borderRadius:'3px 3px 0 0', opacity: hover && !on ? 0.5 : 1}}/>}
-                  <div style={{height:(d.auto / top) * H, background:RP_AUTO_C, borderRadius: d.bulk ? 0 : '3px 3px 0 0', opacity: hover && !on ? 0.5 : 1}}/>
+                  {bulk > 0 && <div style={{height:(bulk / top) * H, background:RP_BULK_C, borderRadius:'3px 3px 0 0', opacity: hover && !on ? 0.5 : 1}}/>}
+                  {auto > 0 && <div style={{height:(auto / top) * H, background:RP_AUTO_C, borderRadius: bulk ? 0 : '3px 3px 0 0', opacity: hover && !on ? 0.5 : 1}}/>}
                 </div>
               );
             })}
