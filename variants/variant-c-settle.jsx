@@ -392,8 +392,9 @@ function stFlowSlice(flows, dir) {
   flows.filter(f => f.dir === dir).forEach(f => stPayInto(s, f, f.receipt));
   return s;
 }
-function stNums(s, total) {
-  return [s.cashI + s.cashO, s.bankI + s.bankO, s.card, s.naver, s.preUse, s.ticketUse, total];
+function stNums(s, total, basis) {
+  const showUse = basis !== 'pay';
+  return [s.cashI + s.cashO, s.bankI + s.bankO, s.card, s.naver, showUse ? s.preUse : 0, showUse ? s.ticketUse : 0, total];
 }
 function stVatSplit(amount) {
   const supply = Math.round((amount || 0) / 1.1);
@@ -423,12 +424,12 @@ function StOverview({ b, basis, rows, total, ticket }) {
   const closeProd = stCloseOf(mx.prod, 'product', basis);
   const closeStore = closeSub + closeProd;
   const storeRows = [
-    { label:'시술', nums: stNums(mx.svc, closeSvc) },
-    { label:'정액권', nums: stNums(mx.pre, closePre) },
-    { label:'티켓', nums: stNums(mx.tix, closeTix) },
-    { label:'소계', sub:true, nums: stNums(subSvc, closeSub) },
-    { label:'제품', nums: stNums(mx.prod, closeProd) },
-    { label:'합계', total:true, nums: stNums(store, closeStore) },
+    { label:'시술', nums: stNums(mx.svc, closeSvc, basis) },
+    { label:'정액권', nums: stNums(mx.pre, closePre, basis) },
+    { label:'티켓', nums: stNums(mx.tix, closeTix, basis) },
+    { label:'소계', sub:true, nums: stNums(subSvc, closeSub, basis) },
+    { label:'제품', nums: stNums(mx.prod, closeProd, basis) },
+    { label:'합계', total:true, nums: stNums(store, closeStore, basis) },
   ];
   const headNums = ['현금', '통장', '카드', '네이버페이', '정액권 사용', '티켓 사용', basis === 'pay' ? '합계 · 결제' : '합계 · 시술'];
 
@@ -445,7 +446,7 @@ function StOverview({ b, basis, rows, total, ticket }) {
     const vat = stVatSplit(svcSum);
     return {
       ...d,
-      svc: [cash(shown), bank(shown), shown.card, shown.naver, use, vat.supply, vat.vat, svcSum],
+      svc: [cash(shown), bank(shown), shown.card, shown.naver, basis === 'pay' ? 0 : use, vat.supply, vat.vat, svcSum],
       prod: [cash(g.prod), bank(g.prod), g.prod.card, g.prod.naver, prodSum],
       sum,
     };
@@ -476,7 +477,7 @@ function StOverview({ b, basis, rows, total, ticket }) {
           <div style={stTitle}>매장 매출</div>
           <div style={{fontSize:11.5, color:C_MUTED, marginTop:3}}>
             {basis === 'pay'
-              ? '합계는 고객이 낸 돈입니다. 정액권·티켓을 쓴 금액은 옆칸에만 표시합니다.'
+              ? '합계는 고객이 낸 돈입니다. 정액권·티켓을 쓴 금액은 넣지 않습니다.'
               : '합계는 시술·제품 금액입니다. 정액권을 쓴 금액은 포함하고, 새로 판 금액은 뺍니다.'}
           </div>
         </div>
@@ -496,7 +497,7 @@ function StOverview({ b, basis, rows, total, ticket }) {
                   </td>
                   {r.nums.map((n, i) => (
                     <td key={i} style={{...stMxTd, fontWeight: i === r.nums.length - 1 || r.total ? 800 : 700, color: n < 0 ? '#DC2626' : (i === r.nums.length - 1 ? C_BLUE : C_INK)}}>
-                      {n ? (n < 0 ? '−' : '') + stWon(Math.abs(n)) : <span style={{color:'#E2E8F0'}}>0</span>}
+                      {basis === 'pay' && (i === 4 || i === 5) ? '' : (n ? (n < 0 ? '−' : '') + stWon(Math.abs(n)) : <span style={{color:'#E2E8F0'}}>0</span>)}
                     </td>
                   ))}
                 </tr>
@@ -509,7 +510,7 @@ function StOverview({ b, basis, rows, total, ticket }) {
       <div style={{...stCard, padding:0, overflow:'hidden'}}>
         <div style={{padding:'12px 14px', borderBottom:`1px solid ${C_BORDER}`}}>
           <div style={stTitle}>담당자별 매출</div>
-          <div style={{fontSize:11.5, color:C_MUTED, marginTop:3}}>시술 합계를 공급가와 부가세로 나눴습니다. 소진은 정액권·티켓·포인트를 쓴 금액입니다.</div>
+          <div style={{fontSize:11.5, color:C_MUTED, marginTop:3}}>{basis === 'pay' ? '시술 합계를 공급가와 부가세로 나눴습니다. 결제 기준이라 소진은 비워 둡니다.' : '시술 합계를 공급가와 부가세로 나눴습니다. 소진은 정액권·티켓·포인트를 쓴 금액입니다.'}</div>
         </div>
         <div style={{overflowX:'auto'}}>
           <table style={{width:'100%', borderCollapse:'collapse', minWidth:1080}}>
@@ -538,7 +539,7 @@ function StOverview({ b, basis, rows, total, ticket }) {
                   </td>
                   {d.svc.concat(d.prod, [d.sum]).map((n, i) => (
                     <td key={i} style={{...stMxTd, fontWeight: i === 7 || i === 12 || i === 13 ? 800 : 700, color: i === 13 ? C_BLUE : C_INK}}>
-                      {n ? stWon(n) : <span style={{color:'#E2E8F0'}}>0</span>}
+                      {basis === 'pay' && i === 4 ? '' : (n ? stWon(n) : <span style={{color:'#E2E8F0'}}>0</span>)}
                     </td>
                   ))}
                 </tr>
@@ -546,7 +547,7 @@ function StOverview({ b, basis, rows, total, ticket }) {
               <tr style={{background:C_BLUE_SOFT}}>
                 <td style={{...stMxTd, textAlign:'left', position:'sticky', left:0, background:C_BLUE_SOFT, fontWeight:800, color:C_BLUE}}>합계</td>
                 {desFoot.svc.concat(desFoot.prod, [desFoot.sum]).map((n, i) => (
-                  <td key={i} style={{...stMxTd, fontWeight:800, color:C_BLUE}}>{n ? stWon(n) : <span style={{color:'#BFDBFE'}}>0</span>}</td>
+                  <td key={i} style={{...stMxTd, fontWeight:800, color:C_BLUE}}>{basis === 'pay' && i === 4 ? '' : (n ? stWon(n) : <span style={{color:'#BFDBFE'}}>0</span>)}</td>
                 ))}
               </tr>
             </tbody>
