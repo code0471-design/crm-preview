@@ -1012,11 +1012,11 @@ function C_PrepaidPage() {
             ))}
           </div>
           <div style={{display:'grid', gridTemplateColumns:'1fr 1.15fr', gap:10, marginBottom:12}}>
-            <PpGroup title={`${name}별`} hint="줄을 누르면 아래 고객만 봅니다." cols={['이름','고객','판매','소진','잔액','평균 소진기간']}
-              rows={byGoods} active={goods} onPick={pickGoods}
+            <PpGroup title={`${name}별`} hint="줄을 누르면 아래 고객만 봅니다. 전체로 돌아오려면 맨 위 전체를 누르세요." cols={['이름','고객','판매','소진','잔액','평균 소진기간']}
+              rows={byGoods} all={ppSum(periodRows)} active={goods} onPick={pickGoods}
               cell={(r) => [r.name, `${r.buyers}명`, stWon(r.sales), stWon(r.used), stWon(r.balance), r.days ? `${r.days}일` : '-']}/>
-            <PpGroup title="담당자별" hint="매출과 잔액. 줄을 누르면 그 담당자 고객만 봅니다." cols={['담당자','고객','판매','소진','잔액','평균 소진기간']}
-              rows={byDes} active={who} onPick={pickWho} dot
+            <PpGroup title="담당자별" hint="매출과 잔액. 전체로 돌아오려면 맨 위 전체를 누르세요." cols={['담당자','고객','판매','소진','잔액','평균 소진기간']}
+              rows={byDes} all={ppSum(periodRows)} active={who} onPick={pickWho} dot
               cell={(r) => [r.name, `${r.buyers}명`, stWon(r.sales), stWon(r.used), stWon(r.balance), r.days ? `${r.days}일` : '-']}/>
           </div>
           <div style={{...stCard, padding:0, overflow:'hidden'}}>
@@ -1073,7 +1073,16 @@ function C_PrepaidPage() {
   );
 }
 
-function PpGroup({ title, hint, cols, rows, active, onPick, cell, dot }) {
+function PpGroup({ title, hint, cols, rows, all, active, onPick, cell, dot }) {
+  const allOn = active === 'all';
+  const allVals = [
+    '전체',
+    `${all.buyers}명`,
+    stWon(all.sales),
+    stWon(all.used),
+    stWon(all.balance),
+    all.days ? `${all.days}일` : '-',
+  ];
   return (
     <div style={{...stCard, padding:0, overflow:'hidden'}}>
       <div style={{padding:'12px 14px', borderBottom:`1px solid ${C_BORDER}`}}>
@@ -1085,6 +1094,12 @@ function PpGroup({ title, hint, cols, rows, active, onPick, cell, dot }) {
           <tr>{cols.map((h, i) => <th key={h} style={{...stMxTh, textAlign: i === 0 ? 'left' : 'right'}}>{h}</th>)}</tr>
         </thead>
         <tbody>
+          <tr onClick={() => onPick('all')} style={{cursor:'pointer', background: allOn ? C_BLUE_SOFT : 'transparent'}}>
+            <td style={{...stMxTd, textAlign:'left', fontWeight:800, color: allOn ? C_BLUE : C_INK, background: allOn ? C_BLUE_SOFT : C_SURFACE}}>전체</td>
+            {allVals.slice(1).map((v, i) => (
+              <td key={i} style={{...stMxTd, color: i === allVals.length - 2 ? C_BLUE : C_INK, fontWeight: i >= allVals.length - 3 ? 800 : 700}}>{v}</td>
+            ))}
+          </tr>
           {rows.map(r => {
             const vals = cell(r);
             const on = active === r.id;
