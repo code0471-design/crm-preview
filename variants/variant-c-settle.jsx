@@ -297,7 +297,7 @@ function C_SettlePage() {
 
           {view === 'overview' && <StOverview b={b} basis={basis} rows={rows} total={total} ticket={ticket}/>}
           {view === 'designer' && <StDesigner byDes={data.byDes} basis={basis}/>}
-          {view === 'menu' && <StMenu b={b} basis={basis}/>}
+          {view === 'menu' && <StMenu rows={rows} basis={basis}/>}
           {view === 'visit' && <StVisit rows={rows} basis={basis}/>}
           {view === 'calendar' && <StCalendar rows={rows} basis={basis} preset={preset}/>}
           {view === 'trend' && <StTrend rows={ST_ROWS.filter(r => designer === 'all' || r.designer === designer)} basis={basis} designer={designer}/>}
@@ -632,36 +632,96 @@ function stAddMerge(a, b) {
   Object.keys(a.cats).forEach(k => { a.cats[k] += b.cats[k] || 0; a.payCats[k] += b.payCats[k] || 0; });
 }
 
-function StMenu({ b, basis }) {
-  const items = ST_CATS.map(c => ({
-    name: c.name,
-    v: basis === 'pay' ? (b.payCats[c.id] || 0) : (b.cats[c.id] || 0),
-  }));
+function stMenuCols(basis) {
+  const cols = ST_CATS.map(c => ({ id:c.id, name:c.name }));
   if (basis === 'pay') {
-    items.push({ name:'정액권 판매', v: b.sale.membership });
-    items.push({ name:'티켓 판매', v: b.sale.ticket });
-    items.push({ name:'예약금 수령', v: b.sale.deposit });
+    cols.push({ id:'membership', name:'정액권' });
+    cols.push({ id:'ticket', name:'티켓' });
+    cols.push({ id:'deposit', name:'예약금' });
   }
-  const shown = items.filter(i => i.v > 0).sort((a, c) => c.v - a.v);
-  const total = shown.reduce((a, i) => a + i.v, 0) || 1;
-  const max = Math.max(1, ...shown.map(i => i.v));
+  return cols;
+}
+function stMenuOf(rows, basis) {
+  const cols = stMenuCols(basis);
+  const map = {};
+  ST_DES.forEach(d => {
+    map[d.id] = {};
+    cols.forEach(c => { map[d.id][c.id] = { amount:0, n:0 }; });
+  });
+  rows.forEach(r => {
+    const box = map[r.designer];
+    if (!box) return;
+    const n = r.n || 1;
+    if ((r.kind === 'service' || r.kind === 'product') && r.cat && box[r.cat]) {
+      box[r.cat].amount += basis === 'pay' ? stMoney(r.pay) : (r.service || 0);
+      box[r.cat].n += n;
+    }
+    if (basis === 'pay' && box[r.kind] && (r.kind === 'membership' || r.kind === 'ticket' || r.kind === 'deposit')) {
+      box[r.kind].amount += stMoney(r.pay);
+      box[r.kind].n += n;
+    }
+  });
+  return { cols, map };
+}
+function StMenu({ rows, basis }) {
+  const { cols, map } = stMenuOf(rows, basis);
+  const list = ST_DES.map(d => {
+    const cells = cols.map(c => map[d.id][c.id]);
+    const sum = cells.reduce((a, c) => a + c.amount, 0);
+    const n = cells.reduce((a, c) => a + c.n, 0);
+    return { ...d, cells, sum, n };
+  }).filter(d => d.sum > 0);
+  const foot = cols.map((_, i) => list.reduce((a, d) => ({ amount: a.amount + d.cells[i].amount, n: a.n + d.cells[i].n }), { amount:0, n:0 }));
+  const footSum = list.reduce((a, d) => a + d.sum, 0);
+  const footN = list.reduce((a, d) => a + d.n, 0);
   return (
-    <div style={stCard}>
-      <div style={stTitle}>{basis === 'pay' ? '어디서 돈이 들어왔나' : '어떤 시술이 매출인가'}</div>
-      <div style={{fontSize:11.5, color:C_MUTED, marginTop:3, marginBottom:12}}>
-        {basis === 'pay' ? '시술에서 받은 결제와, 정액권·티켓·예약금을 판 금액을 나눴습니다.' : '정액권·티켓으로 받은 금액도 그 시술 금액에 포함됩니다.'}
+    <div style={{...stCard, padding:0, overflow:'hidden'}}>
+      <div style={{padding:'12px 14px', borderBottom:`1px solid ${C_BORDER}`}}>
+        <div style={stTitle}>메뉴별</div>
       </div>
-      {shown.map(i => (
-        <div key={i.name} style={{display:'grid', gridTemplateColumns:'88px 1fr 132px', gap:8, alignItems:'center', marginBottom:9}}>
-          <span style={{fontSize:12.5, fontWeight:800, color:C_INK}}>{i.name}</span>
-          <div style={{height:8, borderRadius:4, background:'#F1F5F9'}}>
-            <div style={{height:'100%', width:`${i.v / max * 100}%`, borderRadius:4, background:C_BLUE}}/>
-          </div>
-          <span style={{textAlign:'right', fontSize:12.5, fontWeight:800, fontVariantNumeric:'tabular-nums', color:C_INK}}>
-            {stWon(i.v)}원 <span style={{color:C_MUTED, fontWeight:700}}>{Math.round(i.v / total * 100)}%</span>
-          </span>
-        </div>
-      ))}
+      <div style={{overflowX:'auto'}}>
+        <table style={{width:'100%', borderCollapse:'collapse', minWidth:980}}>
+          <thead>
+            <tr>
+              <th style={{...stMxTh, textAlign:'left'}}>담당자</th>
+              {cols.map(c => <th key={c.id} style={stMxTh}>{c.name}</th>)}
+              <th style={{...stMxTh, color:C_BLUE}}>합계</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map(d => (
+              <tr key={d.id}>
+                <td style={{...stMxTd, textAlign:'left', fontWeight:800}}>
+                  <span style={{display:'inline-flex', alignItems:'center', gap:6}}>
+                    <span style={{width:8, height:8, borderRadius:'50%', background:d.color}}/>
+                    {d.name}
+                  </span>
+                </td>
+                {d.cells.map((c, i) => (
+                  <td key={i} style={stMxTd}>
+                    {c.amount ? stWon(c.amount) : <span style={{color:'#E2E8F0'}}>0</span>}
+                    <div style={{fontSize:10, color:C_MUTED, fontWeight:600}}>{c.n ? `${c.n}건` : ''}</div>
+                  </td>
+                ))}
+                <td style={{...stMxTd, fontWeight:800, color:C_BLUE}}>
+                  {stWon(d.sum)}
+                  <div style={{fontSize:10, color:C_MUTED, fontWeight:600}}>{d.n}건</div>
+                </td>
+              </tr>
+            ))}
+            <tr style={{background:C_BLUE_SOFT}}>
+              <td style={{...stMxTd, textAlign:'left', fontWeight:800, color:C_BLUE, background:C_BLUE_SOFT}}>합계</td>
+              {foot.map((c, i) => (
+                <td key={i} style={{...stMxTd, fontWeight:800, color:C_BLUE}}>
+                  {c.amount ? stWon(c.amount) : '0'}
+                  <div style={{fontSize:10, fontWeight:600}}>{c.n ? `${c.n}건` : ''}</div>
+                </td>
+              ))}
+              <td style={{...stMxTd, fontWeight:800, color:C_BLUE}}>{stWon(footSum)}<div style={{fontSize:10, fontWeight:600}}>{footN}건</div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
