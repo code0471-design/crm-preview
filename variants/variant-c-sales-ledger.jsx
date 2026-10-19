@@ -9,21 +9,21 @@ const {
 const LEDGER_TODAY = '2026-09-21';
 
 const LEDGER_ROWS = [
-  { date:'2026-09-21', time:'10:00', customer:'박서연', menu:'루트터치업', designer:'문지윤', designerId:'moon', kind:'service', visit:'returning', list:70000, discount:0, pay:'card', amount:70000 },
+  { date:'2026-09-21', time:'10:00', customer:'박서연', menu:'루트터치업', designer:'문지윤', designerId:'moon', kind:'service', visit:'returning', list:70000, discount:0, pay:'card', cardLink:'link', amount:70000 },
   { date:'2026-09-21', time:'11:30', customer:'오세훈', menu:'남성컷', designer:'이현진', designerId:'leehj', kind:'service', visit:'fresh', list:20000, discount:0, pay:'cash', amount:20000 },
-  { date:'2026-09-20', time:'14:00', customer:'장하윤', menu:'클리닉', designer:'박소현', designerId:'park', kind:'prepaid', visit:'returning', list:80000, discount:0, pay:'card', amount:0 },
-  { date:'2026-09-19', time:'15:10', customer:'조유진', menu:'모이스처 샴푸', designer:'문지윤', designerId:'moon', kind:'product', visit:'returning', list:38000, discount:3000, pay:'card', amount:35000 },
+  { date:'2026-09-20', time:'14:00', customer:'장하윤', menu:'클리닉', designer:'박소현', designerId:'park', kind:'prepaid', visit:'returning', list:80000, discount:0, pay:'card', cardLink:'solo', amount:0 },
+  { date:'2026-09-19', time:'15:10', customer:'조유진', menu:'모이스처 샴푸', designer:'문지윤', designerId:'moon', kind:'product', visit:'returning', list:38000, discount:3000, pay:'card', cardLink:'link', amount:35000 },
   { date:'2026-09-18', time:'13:20', customer:'유서진', menu:'디지털펌', designer:'한지영', designerId:'han', kind:'service', visit:'fresh', list:180000, discount:0, pay:'naver', amount:180000 },
-  { date:'2026-09-16', time:'12:00', customer:'오세훈', menu:'남성컷', designer:'윤재훈', designerId:'yoon', kind:'ticket', visit:'returning', list:20000, discount:0, pay:'card', amount:0 },
-  { date:'2026-09-11', time:'10:00', customer:'이하늘', menu:'디지털펌', designer:'이상현', designerId:'lee', kind:'service', visit:'fresh', list:180000, discount:0, pay:'card', amount:180000 },
-  { date:'2026-09-11', time:'10:00', customer:'박서연', menu:'루트터치업', designer:'문지윤', designerId:'moon', kind:'service', visit:'returning', list:70000, discount:0, pay:'card', amount:70000 },
-  { date:'2026-09-11', time:'11:00', customer:'강수현', menu:'헤어스파', designer:'문지윤', designerId:'moon', kind:'service', visit:'returning', list:70000, discount:0, pay:'card', amount:70000 },
-  { date:'2026-09-11', time:'11:00', customer:'한지민', menu:'전체염색', designer:'정명희', designerId:'jung', kind:'service', visit:'fresh', list:130000, discount:0, pay:'card', amount:130000 },
+  { date:'2026-09-16', time:'12:00', customer:'오세훈', menu:'남성컷', designer:'윤재훈', designerId:'yoon', kind:'ticket', visit:'returning', list:20000, discount:0, pay:'card', cardLink:'solo', amount:0 },
+  { date:'2026-09-11', time:'10:00', customer:'이하늘', menu:'디지털펌', designer:'이상현', designerId:'lee', kind:'service', visit:'fresh', list:180000, discount:0, pay:'card', cardLink:'link', amount:180000 },
+  { date:'2026-09-11', time:'10:00', customer:'박서연', menu:'루트터치업', designer:'문지윤', designerId:'moon', kind:'service', visit:'returning', list:70000, discount:0, pay:'card', cardLink:'link', amount:70000 },
+  { date:'2026-09-11', time:'11:00', customer:'강수현', menu:'헤어스파', designer:'문지윤', designerId:'moon', kind:'service', visit:'returning', list:70000, discount:0, pay:'card', cardLink:'solo', amount:70000 },
+  { date:'2026-09-11', time:'11:00', customer:'한지민', menu:'전체염색', designer:'정명희', designerId:'jung', kind:'service', visit:'fresh', list:130000, discount:0, pay:'card', cardLink:'link', amount:130000 },
   { date:'2026-09-11', time:'11:30', customer:'장하윤', menu:'뿌리염색+클리닉', designer:'박소현', designerId:'park', kind:'service', visit:'returning', list:150000, discount:15000, pay:'mix', amount:135000 },
-  { date:'2026-09-11', time:'15:30', customer:'김도윤', menu:'정액권 30만원', designer:'이상현', designerId:'lee', kind:'prepaid', visit:'returning', list:300000, discount:0, pay:'card', amount:300000 },
-  { date:'2026-09-08', time:'16:40', customer:'이수아', menu:'커트', designer:'박소현', designerId:'park', kind:'service', visit:'fresh', list:25000, discount:0, pay:'card', amount:25000 },
-  { date:'2026-08-22', time:'11:00', customer:'서지우', menu:'전체염색', designer:'송미란', designerId:'song', kind:'prepaid', visit:'returning', list:130000, discount:0, pay:'card', amount:0 },
-  { date:'2026-08-12', time:'13:30', customer:'홍지수', menu:'디지털펌', designer:'문지윤', designerId:'moon', kind:'service', visit:'fresh', list:180000, discount:0, pay:'card', amount:180000 },
+  { date:'2026-09-11', time:'15:30', customer:'김도윤', menu:'정액권 30만원', designer:'이상현', designerId:'lee', kind:'prepaid', visit:'returning', list:300000, discount:0, pay:'card', cardLink:'link', amount:300000 },
+  { date:'2026-09-08', time:'16:40', customer:'이수아', menu:'커트', designer:'박소현', designerId:'park', kind:'service', visit:'fresh', list:25000, discount:0, pay:'card', cardLink:'solo', amount:25000 },
+  { date:'2026-08-22', time:'11:00', customer:'서지우', menu:'전체염색', designer:'송미란', designerId:'song', kind:'prepaid', visit:'returning', list:130000, discount:0, pay:'card', cardLink:'solo', amount:0 },
+  { date:'2026-08-12', time:'13:30', customer:'홍지수', menu:'디지털펌', designer:'문지윤', designerId:'moon', kind:'service', visit:'fresh', list:180000, discount:0, pay:'card', cardLink:'link', amount:180000 },
 ];
 
 const LEDGER_KINDS = [
@@ -45,6 +45,12 @@ const LEDGER_PAYS = [
   { id:'naver', label:'네이버' },
   { id:'mix', label:'현금+카드' },
 ];
+const LEDGER_CARD_LINKS = [
+  { id:'all', label:'전체' },
+  { id:'solo', label:'단독결제내역' },
+  { id:'link', label:'연동결제내역' },
+];
+const LEDGER_CARD_LABEL = { solo:'단독', link:'연동' };
 const LEDGER_PAY_LABEL = { card:'카드', cash:'현금', naver:'네이버', mix:'현금+카드' };
 const LEDGER_KIND_LABEL = { service:'시술', prepaid:'정액권', ticket:'티켓', product:'제품' };
 
@@ -74,12 +80,13 @@ function C_SalesLedgerPage() {
   const [kind, setKind] = React.useState('all');
   const [visit, setVisit] = React.useState('all');
   const [pay, setPay] = React.useState('all');
+  const [cardLink, setCardLink] = React.useState('all');
   const [designer, setDesigner] = React.useState('all');
 
   const applyRange = (a, b) => { setFrom(a); setTo(b); };
   const reset = () => {
     applyRange(month.from, month.to);
-    setKind('all'); setVisit('all'); setPay('all'); setDesigner('all');
+    setKind('all'); setVisit('all'); setPay('all'); setCardLink('all'); setDesigner('all');
   };
 
   const rows = LEDGER_ROWS.filter(r => {
@@ -87,6 +94,7 @@ function C_SalesLedgerPage() {
     if (kind !== 'all' && r.kind !== kind) return false;
     if (visit !== 'all' && r.visit !== visit) return false;
     if (pay !== 'all' && r.pay !== pay) return false;
+    if (pay === 'card' && cardLink !== 'all' && r.cardLink !== cardLink) return false;
     if (designer !== 'all' && r.designerId !== designer) return false;
     return true;
   }).slice().sort((a, b) => (a.date + a.time < b.date + b.time ? 1 : -1));
@@ -96,9 +104,11 @@ function C_SalesLedgerPage() {
     a.discount += r.discount;
     a.count += 1;
     if (r.pay === 'card' || r.pay === 'cash' || r.pay === 'naver') a[r.pay] += r.amount;
+    if (r.pay === 'card' && r.cardLink === 'solo') a.solo += 1;
+    if (r.pay === 'card' && r.cardLink === 'link') a.link += 1;
     if (r.pay === 'mix') a.mix += r.amount;
     return a;
-  }, { amount:0, discount:0, count:0, card:0, cash:0, naver:0, mix:0 });
+  }, { amount:0, discount:0, count:0, card:0, cash:0, naver:0, mix:0, solo:0, link:0 });
 
   const designers = DESIGNERS.filter(d => LEDGER_ROWS.some(r => r.designerId === d.id));
 
@@ -134,7 +144,10 @@ function C_SalesLedgerPage() {
             <div style={{display:'flex', flexDirection:'column', gap:8, marginTop:12}}>
               <LedgerChips label="구분" value={kind} options={LEDGER_KINDS} onChange={setKind}/>
               <LedgerChips label="방문" value={visit} options={LEDGER_VISITS} onChange={setVisit}/>
-              <LedgerChips label="결제" value={pay} options={LEDGER_PAYS} onChange={setPay}/>
+              <LedgerChips label="결제" value={pay} options={LEDGER_PAYS} onChange={(id) => { setPay(id); if (id !== 'card') setCardLink('all'); }}/>
+              {pay === 'card' && (
+                <LedgerChips label="카드" value={cardLink} options={LEDGER_CARD_LINKS} onChange={setCardLink}/>
+              )}
             </div>
             <div style={{display:'flex', alignItems:'center', gap:8, marginTop:12}}>
               <span style={{fontSize:11.5, fontWeight:700, color:C_MUTED, width:36}}>담당</span>
@@ -149,7 +162,7 @@ function C_SalesLedgerPage() {
             {[
               { label:'결제액', value:`₩ ${ledgerWon(sum.amount)}`, sub:`${sum.count}건` },
               { label:'건수', value:`${sum.count}건`, sub: sum.discount ? `할인 ${ledgerWon(sum.discount)}` : '할인 없음' },
-              { label:'카드', value:`₩ ${ledgerWon(sum.card)}`, sub:'카드 결제' },
+              { label:'카드', value:`₩ ${ledgerWon(sum.card)}`, sub:`단독 ${sum.solo} · 연동 ${sum.link}` },
               { label:'현금', value:`₩ ${ledgerWon(sum.cash)}`, sub:'현금 결제' },
               { label:'네이버', value:`₩ ${ledgerWon(sum.naver)}`, sub: sum.mix ? `현금+카드 ${ledgerWon(sum.mix)}` : '네이버 결제' },
             ].map(k => (
@@ -188,7 +201,18 @@ function C_SalesLedgerPage() {
                     <td style={{...ledgerTd, textAlign:'right'}}>{ledgerWon(r.list)}</td>
                     <td style={{...ledgerTd, textAlign:'right', color: r.discount ? '#DC2626' : '#CBD5E1'}}>{r.discount ? '-'+ledgerWon(r.discount) : '0'}</td>
                     <td style={{...ledgerTd, textAlign:'right', fontWeight:800, color:C_INK}}>{ledgerWon(r.amount)}</td>
-                    <td style={ledgerTd}>{LEDGER_PAY_LABEL[r.pay]}</td>
+                    <td style={ledgerTd}>
+                      {r.pay === 'card' ? (
+                        <span style={{display:'inline-flex', alignItems:'center', gap:4}}>
+                          카드
+                          <span style={{
+                            fontSize:10, fontWeight:800, borderRadius:99, padding:'2px 6px',
+                            color: r.cardLink === 'link' ? C_BLUE : '#B45309',
+                            background: r.cardLink === 'link' ? C_BLUE_SOFT : '#FFFBEB',
+                          }}>{LEDGER_CARD_LABEL[r.cardLink]}</span>
+                        </span>
+                      ) : LEDGER_PAY_LABEL[r.pay]}
+                    </td>
                   </tr>
                 ))}
               </tbody>

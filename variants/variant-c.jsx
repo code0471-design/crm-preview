@@ -63,12 +63,11 @@ const SETTINGS_SUB = [
   { id:'settings-group',    label:'고객 그룹 설정' },
 ];
 const ANALYTICS_SUB = [
-  { id:'analytics-ledger',    label:'매출내역' },
   { id:'analytics-dashboard', label:'분석 대시보드' },
+  { id:'analytics-ledger',    label:'매출내역' },
   { id:'analytics-sales',     label:'결산' },
   { id:'analytics-prepaid',   label:'정액권 분석' },
   { id:'analytics-customer',  label:'고객 분석' },
-  { id:'analytics-terminal',  label:'단말기 설정' },
 ];
 const MARKETING_SUB = [
   { id:'mkt-bulk',    label:'단체발송' },
@@ -93,7 +92,6 @@ const STUB_PAGES = {
   'store':                { crumbs:['홈','스토어'],           title:'스토어',              desc:'제품 재고, 발주, 매장 물품 관리 기능이 들어갑니다.' },
   'analytics-dashboard':  { crumbs:['홈','분석','분석 대시보드'],  title:'분석 대시보드',   desc:'매출·객수·시술별 깊은 통계와 리포트를 제공합니다.' },
   'analytics-customer':   { crumbs:['홈','분석','고객 분석'],      title:'고객 분석',       desc:'재방문율, 이탈률, 채널 성과 등 고객 행동 분석을 제공합니다.' },
-  'analytics-terminal':   { crumbs:['홈','분석','단말기 설정'],    title:'단말기 설정',     desc:'카드/POS 단말기 연동을 설정합니다.' },
   'settings-payroll':     { crumbs:['홈','설정','실시간 급여정산'], title:'실시간 급여정산', desc:'디자이너별 매출·수수료를 실시간으로 정산합니다.' },
   'settings-lumi':        { crumbs:['홈','설정','쌀롱 루미'],       title:'쌀롱 루미 설정',   desc:'매장 통합 브랜드 서비스인 쌀롱 루미 연동을 설정합니다.' },
   'settings-terminal':    { crumbs:['홈','설정','단말기 설정'],    title:'단말기 설정',     desc:'카드/POS 단말기 연동을 설정합니다.' },
