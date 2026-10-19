@@ -277,3 +277,4 @@ const ledgerDate = {
 const ledgerTd = { padding:'8px 10px', color:C_INK, whiteSpace:'nowrap' };
 
 window.C_SalesLedgerPage = C_SalesLedgerPage;
+window.LEDGER_ROWS = LEDGER_ROWS;

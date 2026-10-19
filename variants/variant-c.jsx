@@ -65,6 +65,7 @@ const SETTINGS_SUB = [
 const ANALYTICS_SUB = [
   { id:'analytics-dashboard', label:'분석 대시보드' },
   { id:'analytics-ledger',    label:'매출내역' },
+  { id:'analytics-term-log',  label:'단말기 결제내역' },
   { id:'analytics-sales',     label:'결산' },
   { id:'analytics-prepaid',   label:'정액권 분석' },
   { id:'analytics-customer',  label:'고객 분석' },
@@ -2461,6 +2462,7 @@ function VariantC() {
           if (page === 'closing' && ClosingCmp) return <ClosingCmp/>;
           if (page === 'staff-sub' && window.C_StaffSubPage) return <window.C_StaffSubPage/>;
           if (page === 'analytics-ledger' && window.C_SalesLedgerPage) return <window.C_SalesLedgerPage/>;
+          if (page === 'analytics-term-log' && window.C_TermLogPage) return <window.C_TermLogPage/>;
           if (page === 'analytics-dashboard' && window.C_DashPage) return <window.C_DashPage/>;
           if (page === 'analytics-sales' && window.C_SettlePage) return <window.C_SettlePage/>;
           if (page === 'analytics-prepaid' && window.C_PrepaidPage) return <window.C_PrepaidPage/>;
