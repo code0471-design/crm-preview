@@ -749,11 +749,14 @@ function StCalendar({ rows, basis, preset }) {
   const byDay = {};
   rows.forEach(r => {
     if (r.m !== month) return;
-    if (!byDay[r.day]) byDay[r.day] = { total:0, fresh:0, back:0 };
+    if (!byDay[r.day]) byDay[r.day] = { total:0, fresh:0, back:0, nTotal:0, nFresh:0, nBack:0 };
     const amt = stRowAmount(r, basis);
-    byDay[r.day].total += amt;
-    if (r.visit === 'new') byDay[r.day].fresh += amt;
-    else byDay[r.day].back += amt;
+    const n = r.n || 1;
+    const box = byDay[r.day];
+    box.total += amt;
+    box.nTotal += n;
+    if (r.visit === 'new') { box.fresh += amt; box.nFresh += n; }
+    else { box.back += amt; box.nBack += n; }
   });
   const cells = [];
   for (let i = 0; i < first; i++) cells.push(null);
@@ -790,10 +793,10 @@ function StCalendar({ rows, basis, preset }) {
                     <>
                       <div style={{fontSize:11, fontWeight:700, color: di === 0 ? '#DC2626' : C_MUTED}}>{d}</div>
                       {cell && (
-                        <div style={{marginTop:6, display:'flex', flexDirection:'column', gap:2, fontSize:11, fontVariantNumeric:'tabular-nums', lineHeight:1.3}}>
-                          <div style={{fontWeight:800, color:C_INK}}>합계 {stWon(cell.total)}</div>
-                          <div style={{fontWeight:700, color:'#059669'}}>신규 {stWon(cell.fresh)}</div>
-                          <div style={{fontWeight:700, color:C_BLUE}}>기존 {stWon(cell.back)}</div>
+                        <div style={{marginTop:6, display:'flex', flexDirection:'column', gap:2, fontSize:11, fontVariantNumeric:'tabular-nums', lineHeight:1.35}}>
+                          <div style={{fontWeight:800, color:C_INK}}>합계 {stWon(cell.total)} <span style={{fontWeight:700, color:C_MUTED}}>{cell.nTotal}건</span></div>
+                          <div style={{fontWeight:700, color:'#059669'}}>신규 {stWon(cell.fresh)} <span style={{color:'#047857'}}>{cell.nFresh}건</span></div>
+                          <div style={{fontWeight:700, color:C_BLUE}}>기존 {stWon(cell.back)} <span style={{color:'#1E3A8A'}}>{cell.nBack}건</span></div>
                         </div>
                       )}
                     </>
