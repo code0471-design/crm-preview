@@ -2427,7 +2427,7 @@ function VariantC() {
         .c-schedule-cell:hover { background: #F8FBFF !important; }
       `}</style>
       {/* 최상단 헤더 (예약/매장일정에서는 사이드 패널 폭 260 추가) */}
-      <div style={{width: salesTarget || page === 'booking' || page === 'schedule' || page === 'analytics-sales' || page === 'analytics-prepaid' ? 1272 : (page === 'mkt-bulk' || page === 'mkt-auto') ? 1272 : 1012, flexShrink:0}}>
+      <div style={{width: salesTarget || page === 'booking' || page === 'schedule' || page === 'analytics-sales' || page === 'analytics-prepaid' || page === 'analytics-customer' ? 1272 : (page === 'mkt-bulk' || page === 'mkt-auto') ? 1272 : 1012, flexShrink:0}}>
         <C_TopHeader
           onOpenCustomerRegister={() => setModal('customer-register')}
           onOpenGuestSales={() => setSalesTarget({ guest:true, key: Date.now() })}
@@ -2435,7 +2435,7 @@ function VariantC() {
         />
       </div>
       {/* 아래: 좌 사이드바(아이콘) + 우 페이지 콘텐츠 (+ 예약/매장일정 페이지는 우측 사이드 패널 260) */}
-      <div style={{display:'flex', flex:1, minHeight:0, width: salesTarget || page === 'booking' || page === 'schedule' || page === 'analytics-sales' || page === 'analytics-prepaid' ? 1272 : (page === 'mkt-bulk' || page === 'mkt-auto') ? 1272 : 1012}}>
+      <div style={{display:'flex', flex:1, minHeight:0, width: salesTarget || page === 'booking' || page === 'schedule' || page === 'analytics-sales' || page === 'analytics-prepaid' || page === 'analytics-customer' ? 1272 : (page === 'mkt-bulk' || page === 'mkt-auto') ? 1272 : 1012}}>
         <C_SideBar page={page} onPage={(pg) => { setSalesTarget(null); setPage(pg); }}/>
         {(() => {
           const StatsCmp = window.C_StatsPage;
@@ -2465,6 +2465,7 @@ function VariantC() {
           if (page === 'analytics-ledger' && window.C_SalesLedgerPage) return <window.C_SalesLedgerPage/>;
           if (page === 'analytics-sales' && window.C_SettlePage) return <window.C_SettlePage/>;
           if (page === 'analytics-prepaid' && window.C_PrepaidPage) return <window.C_PrepaidPage/>;
+          if (page === 'analytics-customer' && window.C_CustomerPage) return <window.C_CustomerPage/>;
           const OpsCmp = window.C_OpsPage;
           const SmsCmp = window.C_SmsPage;
           if (page === 'settings-menu' && SettingsMenu) return <SettingsMenu/>;
