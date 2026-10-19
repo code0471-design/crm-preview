@@ -104,11 +104,11 @@ function C_SalesLedgerPage() {
     a.discount += r.discount;
     a.count += 1;
     if (r.pay === 'card' || r.pay === 'cash' || r.pay === 'naver') a[r.pay] += r.amount;
-    if (r.pay === 'card' && r.cardLink === 'solo') a.solo += 1;
-    if (r.pay === 'card' && r.cardLink === 'link') a.link += 1;
+    if (r.pay === 'card' && r.cardLink === 'solo') { a.solo += 1; a.soloAmount += r.amount; }
+    if (r.pay === 'card' && r.cardLink === 'link') { a.link += 1; a.linkAmount += r.amount; }
     if (r.pay === 'mix') a.mix += r.amount;
     return a;
-  }, { amount:0, discount:0, count:0, card:0, cash:0, naver:0, mix:0, solo:0, link:0 });
+  }, { amount:0, discount:0, count:0, card:0, cash:0, naver:0, mix:0, solo:0, link:0, soloAmount:0, linkAmount:0 });
 
   const designers = DESIGNERS.filter(d => LEDGER_ROWS.some(r => r.designerId === d.id));
 
@@ -162,7 +162,7 @@ function C_SalesLedgerPage() {
             {[
               { label:'결제액', value:`₩ ${ledgerWon(sum.amount)}`, sub:`${sum.count}건` },
               { label:'건수', value:`${sum.count}건`, sub: sum.discount ? `할인 ${ledgerWon(sum.discount)}` : '할인 없음' },
-              { label:'카드', value:`₩ ${ledgerWon(sum.card)}`, sub:`단독 ${sum.solo} · 연동 ${sum.link}` },
+              { label:'카드', value:`₩ ${ledgerWon(sum.card)}`, sub:`단독 ₩${ledgerWon(sum.soloAmount)} · 연동 ₩${ledgerWon(sum.linkAmount)}` },
               { label:'현금', value:`₩ ${ledgerWon(sum.cash)}`, sub:'현금 결제' },
               { label:'네이버', value:`₩ ${ledgerWon(sum.naver)}`, sub: sum.mix ? `현금+카드 ${ledgerWon(sum.mix)}` : '네이버 결제' },
             ].map(k => (
@@ -174,52 +174,80 @@ function C_SalesLedgerPage() {
             ))}
           </div>
 
-          <div style={{background:C_SURFACE, border:`1px solid ${C_BORDER}`, borderRadius:12, overflow:'hidden'}}>
-            <table style={{width:'100%', borderCollapse:'collapse', fontSize:12, fontVariantNumeric:'tabular-nums'}}>
-              <thead>
-                <tr style={{background:'#FBFCFE', color:C_MUTED, fontSize:11}}>
-                  {['일시','고객','구분','메뉴','담당','판매가','할인','결제액','결제'].map(h => (
-                    <th key={h} style={{padding:'8px 10px', fontWeight:700, textAlign: ['판매가','할인','결제액'].includes(h) ? 'right' : 'left', borderBottom:`1px solid ${C_BORDER}`, whiteSpace:'nowrap'}}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.length === 0 && (
-                  <tr><td colSpan={9} style={{padding:'36px 12px', textAlign:'center', color:C_MUTED, fontSize:13}}>이 조건에 해당하는 매출이 없어요.</td></tr>
-                )}
-                {rows.map((r, i) => (
-                  <tr key={i} style={{borderTop:`1px solid ${C_BORDER}`}}>
-                    <td style={ledgerTd}>{r.date.slice(5).replace('-', '.')} {r.time}</td>
-                    <td style={ledgerTd}>
-                      <button onClick={() => window.__openSales && window.__openSales({
-                        customer:r.customer, menu:r.menu, designer:r.designerId, amount:r.amount, pay:r.pay, detail:true, key:Date.now(),
-                      })} style={{border:'none', background:'none', padding:0, color:C_BLUE, fontWeight:700, cursor:'pointer', fontFamily:'inherit', fontSize:12}}>{r.customer}</button>
-                    </td>
-                    <td style={ledgerTd}>{LEDGER_KIND_LABEL[r.kind]}</td>
-                    <td style={{...ledgerTd, fontWeight:700, color:C_INK}}>{r.menu}</td>
-                    <td style={ledgerTd}>{r.designer}</td>
-                    <td style={{...ledgerTd, textAlign:'right'}}>{ledgerWon(r.list)}</td>
-                    <td style={{...ledgerTd, textAlign:'right', color: r.discount ? '#DC2626' : '#CBD5E1'}}>{r.discount ? '-'+ledgerWon(r.discount) : '0'}</td>
-                    <td style={{...ledgerTd, textAlign:'right', fontWeight:800, color:C_INK}}>{ledgerWon(r.amount)}</td>
-                    <td style={ledgerTd}>
-                      {r.pay === 'card' ? (
-                        <span style={{display:'inline-flex', alignItems:'center', gap:4}}>
-                          카드
-                          <span style={{
-                            fontSize:10, fontWeight:800, borderRadius:99, padding:'2px 6px',
-                            color: r.cardLink === 'link' ? C_BLUE : '#B45309',
-                            background: r.cardLink === 'link' ? C_BLUE_SOFT : '#FFFBEB',
-                          }}>{LEDGER_CARD_LABEL[r.cardLink]}</span>
-                        </span>
-                      ) : LEDGER_PAY_LABEL[r.pay]}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {pay === 'card' && cardLink === 'all' ? (
+            <div style={{display:'flex', flexDirection:'column', gap:12}}>
+              <LedgerBlock title="단독결제내역" rows={rows.filter(r => r.cardLink === 'solo')}/>
+              <LedgerBlock title="연동결제내역" rows={rows.filter(r => r.cardLink === 'link')}/>
+            </div>
+          ) : (
+            <LedgerBlock title={pay === 'card' ? (cardLink === 'solo' ? '단독결제내역' : '연동결제내역') : '매출 내역'} rows={rows}/>
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function LedgerBlock({ title, rows }) {
+  const amount = rows.reduce((a, r) => a + r.amount, 0);
+  return (
+    <div style={{background:C_SURFACE, border:`1px solid ${C_BORDER}`, borderRadius:12, overflow:'hidden'}}>
+      <div style={{display:'flex', alignItems:'center', gap:10, padding:'12px 14px', borderBottom:`1px solid ${C_BORDER}`}}>
+        <div style={{fontSize:13.5, fontWeight:800, color:C_INK}}>{title}</div>
+        <div style={{fontSize:12, color:C_MUTED, fontWeight:700}}>{rows.length}건</div>
+        <div style={{marginLeft:'auto', fontSize:13, fontWeight:800, color:C_BLUE, fontVariantNumeric:'tabular-nums'}}>합계 ₩ {ledgerWon(amount)}</div>
+      </div>
+      <table style={{width:'100%', borderCollapse:'collapse', fontSize:12, fontVariantNumeric:'tabular-nums'}}>
+        <thead>
+          <tr style={{background:'#FBFCFE', color:C_MUTED, fontSize:11}}>
+            {['일시','고객','구분','메뉴','담당','판매가','할인','결제액','결제'].map(h => (
+              <th key={h} style={{padding:'8px 10px', fontWeight:700, textAlign: ['판매가','할인','결제액'].includes(h) ? 'right' : 'left', borderBottom:`1px solid ${C_BORDER}`, whiteSpace:'nowrap'}}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 && (
+            <tr><td colSpan={9} style={{padding:'28px 12px', textAlign:'center', color:C_MUTED, fontSize:13}}>이 조건에 해당하는 매출이 없어요.</td></tr>
+          )}
+          {rows.map((r, i) => (
+            <tr key={i} style={{borderTop:`1px solid ${C_BORDER}`}}>
+              <td style={ledgerTd}>{r.date.slice(5).replace('-', '.')} {r.time}</td>
+              <td style={ledgerTd}>
+                <button onClick={() => window.__openSales && window.__openSales({
+                  customer:r.customer, menu:r.menu, designer:r.designerId, amount:r.amount, pay:r.pay, detail:true, key:Date.now(),
+                })} style={{border:'none', background:'none', padding:0, color:C_BLUE, fontWeight:700, cursor:'pointer', fontFamily:'inherit', fontSize:12}}>{r.customer}</button>
+              </td>
+              <td style={ledgerTd}>{LEDGER_KIND_LABEL[r.kind]}</td>
+              <td style={{...ledgerTd, fontWeight:700, color:C_INK}}>{r.menu}</td>
+              <td style={ledgerTd}>{r.designer}</td>
+              <td style={{...ledgerTd, textAlign:'right'}}>{ledgerWon(r.list)}</td>
+              <td style={{...ledgerTd, textAlign:'right', color: r.discount ? '#DC2626' : '#CBD5E1'}}>{r.discount ? '-'+ledgerWon(r.discount) : '0'}</td>
+              <td style={{...ledgerTd, textAlign:'right', fontWeight:800, color:C_INK}}>{ledgerWon(r.amount)}</td>
+              <td style={ledgerTd}>
+                {r.pay === 'card' ? (
+                  <span style={{display:'inline-flex', alignItems:'center', gap:4}}>
+                    카드
+                    <span style={{
+                      fontSize:10, fontWeight:800, borderRadius:99, padding:'2px 6px',
+                      color: r.cardLink === 'link' ? C_BLUE : '#B45309',
+                      background: r.cardLink === 'link' ? C_BLUE_SOFT : '#FFFBEB',
+                    }}>{LEDGER_CARD_LABEL[r.cardLink]}</span>
+                  </span>
+                ) : LEDGER_PAY_LABEL[r.pay]}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        {rows.length > 0 && (
+          <tfoot>
+            <tr style={{background:C_BLUE_SOFT}}>
+              <td colSpan={7} style={{...ledgerTd, fontWeight:800, color:C_BLUE}}>합계</td>
+              <td style={{...ledgerTd, textAlign:'right', fontWeight:800, color:C_BLUE}}>{ledgerWon(amount)}</td>
+              <td style={{...ledgerTd, fontWeight:800, color:C_BLUE}}>{rows.length}건</td>
+            </tr>
+          </tfoot>
+        )}
+      </table>
     </div>
   );
 }
