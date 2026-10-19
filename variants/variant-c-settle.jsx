@@ -1225,3 +1225,4 @@ const stTd = { padding:'9px 10px', fontSize:12, fontWeight:700, color:C_INK, tex
 
 window.C_SettlePage = C_SettlePage;
 window.C_PrepaidPage = C_PrepaidPage;
+Object.assign(window, { ST_DES, ST_CATS, ST_VISITS, ST_PRESETS, stRowsFor, stCollect, PP_HOLD });

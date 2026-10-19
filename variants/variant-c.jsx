@@ -2463,6 +2463,7 @@ function VariantC() {
           if (page === 'closing' && ClosingCmp) return <ClosingCmp/>;
           if (page === 'staff-sub' && window.C_StaffSubPage) return <window.C_StaffSubPage/>;
           if (page === 'analytics-ledger' && window.C_SalesLedgerPage) return <window.C_SalesLedgerPage/>;
+          if (page === 'analytics-dashboard' && window.C_DashPage) return <window.C_DashPage/>;
           if (page === 'analytics-sales' && window.C_SettlePage) return <window.C_SettlePage/>;
           if (page === 'analytics-prepaid' && window.C_PrepaidPage) return <window.C_PrepaidPage/>;
           if (page === 'analytics-customer' && window.C_CustomerPage) return <window.C_CustomerPage/>;
