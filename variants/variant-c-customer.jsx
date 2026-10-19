@@ -1,4 +1,4 @@
-// 분석 › 고객 분석 — 재방문, 이탈, 들어온 경로
+// 분석 › 고객 분석 — 재방문, 이탈
 const {
   C_BLUE, C_BLUE_SOFT, C_INK, C_MUTED, C_BORDER, C_BG, C_SURFACE,
 } = window;
@@ -8,11 +8,6 @@ const CA_PRESETS = [
   { id:'last',  label:'지난달', from:'2026.08.01', to:'2026.08.31', test:v => v.days >= 21 && v.days <= 51, prev:v => v.days >= 52 && v.days <= 82, prevLabel:'그 전달' },
   { id:'q',     label:'최근 3개월', from:'2026.06.23', to:'2026.09.21', test:v => v.days <= 90 },
   { id:'all',   label:'전체', from:'', to:'2026.09.21', test:() => true },
-];
-const CA_CHANNELS = [
-  { id:'road',   name:'로드',   color:'#3B82F6' },
-  { id:'online', name:'온라인', color:'#06B6D4' },
-  { id:'intro',  name:'소개',   color:'#F59E0B' },
 ];
 const CA_ST = {
   back: { label:'기간 안 재방문', color:'#059669', bg:'#ECFDF5' },
@@ -36,8 +31,6 @@ function caCat(id) {
   return ((window.MENU_CATEGORIES || []).find(c => c.id === id) || {}).name || id;
 }
 function caEnrich() {
-  const people = {};
-  (window.MKT_CUSTOMERS || []).forEach(c => { people[c.id] = c; });
   const cycles = window.RV_DEFAULT_CYCLE || {};
   return (window.RV_VISITS || []).map(v => {
     const cycle = cycles[v.cat] || 60;
@@ -46,8 +39,7 @@ function caEnrich() {
     if (v.after != null) st = v.after <= limit ? 'back' : 'late';
     else if (v.days < cycle) st = 'wait';
     else if (v.days < limit) st = 'due';
-    const person = people[v.cid] || {};
-    return { ...v, cycle, st, channel: person.channel || 'road' };
+    return { ...v, cycle, st };
   });
 }
 function caPack(rows) {
@@ -68,7 +60,6 @@ function C_CustomerPage() {
   const [preset, setPreset] = React.useState('q');
   const [designer, setDesigner] = React.useState('all');
   const [cat, setCat] = React.useState('all');
-  const [channel, setChannel] = React.useState('all');
   const [status, setStatus] = React.useState('all');
   const [freshOnly, setFreshOnly] = React.useState(false);
   const [shown, setShown] = React.useState(40);
@@ -97,11 +88,9 @@ function C_CustomerPage() {
     });
     return Object.keys(map).map(id => ({ id, name:caCat(id), cycle:(window.RV_DEFAULT_CYCLE || {})[id] || 60, ...caPack(map[id]) })).sort((a, b) => b.n - a.n);
   }, [scoped]);
-  const chRows = CA_CHANNELS.map(c => ({ ...c, ...caPack(scoped.filter(v => v.channel === c.id)) })).filter(c => c.n > 0);
 
   const list = scoped.filter(v => {
     if (cat !== 'all' && v.cat !== cat) return false;
-    if (channel !== 'all' && v.channel !== channel) return false;
     if (status !== 'all' && v.st !== status) return false;
     if (freshOnly && !v.isNew) return false;
     return true;
@@ -110,16 +99,14 @@ function C_CustomerPage() {
   const ranked = desRows.filter(d => d.ready >= 8 && d.rate != null).slice().sort((a, b) => b.rate - a.rate);
   const best = ranked[0];
   const weak = ranked[ranked.length - 1];
-  const bestCh = chRows.filter(c => c.ready >= 8 && c.rate != null).slice().sort((a, b) => b.rate - a.rate)[0];
   const fromLabel = preset === 'all' && period.length ? caDate(Math.max(...period.map(v => v.days))) : range.from;
 
   const pickStatus = (id) => { setFreshOnly(false); setStatus(s => s === id ? 'all' : id); setShown(40); };
-  const clearAll = () => { setDesigner('all'); setCat('all'); setChannel('all'); setStatus('all'); setFreshOnly(false); setShown(40); };
+  const clearAll = () => { setDesigner('all'); setCat('all'); setStatus('all'); setFreshOnly(false); setShown(40); };
 
   const chips = [];
   if (designer !== 'all') chips.push({ k:'des', label:caDes(designer).name });
   if (cat !== 'all') chips.push({ k:'cat', label:caCat(cat) });
-  if (channel !== 'all') chips.push({ k:'ch', label:(CA_CHANNELS.find(c => c.id === channel) || {}).name });
   if (freshOnly) chips.push({ k:'new', label:'신규' });
   if (status !== 'all') chips.push({ k:'st', label:CA_ST[status].label });
 
@@ -157,7 +144,6 @@ function C_CustomerPage() {
           {best && weak && best.des.id !== weak.des.id && (
             <div style={{fontSize:12.5, color:C_INK, fontWeight:600, marginBottom:12, lineHeight:1.5}}>
               {best.des.name} 재방문율 {best.rate}% · {weak.des.name} {weak.rate}%
-              {bestCh ? ` · ${bestCh.name} 유입 ${bestCh.rate}%` : ''}
             </div>
           )}
 
@@ -180,7 +166,6 @@ function C_CustomerPage() {
                 <button key={c.k} onClick={() => {
                   if (c.k === 'des') setDesigner('all');
                   if (c.k === 'cat') setCat('all');
-                  if (c.k === 'ch') setChannel('all');
                   if (c.k === 'new') setFreshOnly(false);
                   if (c.k === 'st') setStatus('all');
                   setShown(40);
@@ -234,7 +219,7 @@ function C_CustomerPage() {
               </table>
             </CaCard>
 
-            <div style={{display:'flex', flexDirection:'column', gap:12}}>
+            <div>
               <CaCard title="시술별" sub="권장 주기 안에 다시 왔는지">
                 <table style={caTable}>
                   <thead>
@@ -266,28 +251,6 @@ function C_CustomerPage() {
                   </tbody>
                 </table>
               </CaCard>
-
-              <CaCard title="들어온 경로" sub="처음 온 경로별 재방문">
-                <div style={{display:'flex', flexDirection:'column', gap:8, padding:'12px 14px 14px'}}>
-                  {chRows.map(c => {
-                    const on = channel === c.id;
-                    return (
-                      <button key={c.id} onClick={() => { setChannel(on ? 'all' : c.id); setShown(40); }} style={{
-                        display:'grid', gridTemplateColumns:'64px 1fr 72px 56px', gap:8, alignItems:'center',
-                        border:`1px solid ${on ? C_BLUE : C_BORDER}`, borderRadius:8, background: on ? C_BLUE_SOFT : C_SURFACE,
-                        padding:'8px 10px', cursor:'pointer', fontFamily:'inherit', textAlign:'left',
-                      }}>
-                        <span style={{fontSize:12.5, fontWeight:800, color:C_INK}}>{c.name}</span>
-                        <span style={{height:6, borderRadius:99, background:'#EEF1F6', overflow:'hidden'}}>
-                          <span style={{display:'block', width:`${Math.min(100, c.rate || 0)}%`, height:'100%', background:c.color}}/>
-                        </span>
-                        <span style={{fontSize:12, fontWeight:800, color:C_INK, fontVariantNumeric:'tabular-nums', textAlign:'right'}}>{c.rate == null ? '—' : `${c.rate}%`}</span>
-                        <span style={{fontSize:11, color:C_MUTED, textAlign:'right'}}>{c.n.toLocaleString()}명</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </CaCard>
             </div>
           </div>
 
@@ -299,7 +262,6 @@ function C_CustomerPage() {
                   <th style={caThL}>연락처</th>
                   <th style={caThL}>담당자</th>
                   <th style={caThL}>시술</th>
-                  <th style={caThL}>경로</th>
                   <th style={caTh}>기준 방문</th>
                   <th style={caThL}>상태</th>
                 </tr>
@@ -308,7 +270,6 @@ function C_CustomerPage() {
                 {list.slice(0, shown).map(v => {
                   const d = caDes(v.designer);
                   const st = CA_ST[v.st];
-                  const ch = CA_CHANNELS.find(c => c.id === v.channel);
                   return (
                     <tr key={v.id}>
                       <td style={{...caTdL, fontWeight:700, color:C_INK}}>
@@ -318,7 +279,6 @@ function C_CustomerPage() {
                       <td style={{...caTdL, color:C_MUTED}}>{v.phone}</td>
                       <td style={caTdL}>{d.name}</td>
                       <td style={caTdL}>{caCat(v.cat)}</td>
-                      <td style={caTdL}>{ch ? ch.name : '—'}</td>
                       <td style={caTd}>{caDate(v.days)}</td>
                       <td style={caTdL}>
                         <span style={{display:'inline-block', fontSize:11, fontWeight:700, color:st.color, background:st.bg, borderRadius:99, padding:'3px 8px'}}>
@@ -329,7 +289,7 @@ function C_CustomerPage() {
                   );
                 })}
                 {list.length === 0 && (
-                  <tr><td colSpan={7} style={{...caTdL, color:C_MUTED, padding:'22px 12px'}}>이 조건의 고객이 없습니다.</td></tr>
+                  <tr><td colSpan={6} style={{...caTdL, color:C_MUTED, padding:'22px 12px'}}>이 조건의 고객이 없습니다.</td></tr>
                 )}
               </tbody>
             </table>
