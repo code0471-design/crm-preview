@@ -15,7 +15,7 @@ const SUB_PREV_TO = '2026-08-31';
 const SUB_SEED = [
   { id:1,  date:'2026-09-21', time:'10:00', customer:'박서연', menu:'루트터치업',  kind:'prepaid', voucher:'정액권 30만원', amount:70000,  seller:'문지윤', performer:'문지윤', done:false, give:0, pct:null },
   { id:2,  date:'2026-09-21', time:'11:30', customer:'강수현', menu:'헤어스파',    kind:'prepaid', voucher:'정액권 30만원', amount:70000,  seller:'문지윤', performer:'이상현', done:false, give:0, pct:null },
-  { id:3,  date:'2026-09-21', time:'13:00', customer:'유서진', menu:'디지털펌',    kind:'ticket',  voucher:'염색 5회권',   amount:90000,  seller:'한지영', performer:'송미란', done:false, give:0, pct:null },
+  { id:3,  date:'2026-09-21', time:'13:00', customer:'유서진', menu:'디지털펌',    kind:'ticket',  voucher:'염색 5회권',   amount:90000,  seller:'조희정', performer:'송미란', done:false, give:0, pct:null },
   { id:4,  date:'2026-09-21', time:'15:00', customer:'한지민', menu:'전체염색',    kind:'ticket',  voucher:'염색 5회권',   amount:130000, seller:'정명희', performer:'정명희', done:false, give:0, pct:null },
   { id:5,  date:'2026-09-21', time:'16:30', customer:'이하늘', menu:'뿌리염색',    kind:'ticket',  voucher:'뿌리염색권',   amount:90000,  seller:'이상현', performer:'문지윤', done:false, give:0, pct:null },
   { id:6,  date:'2026-09-20', time:'14:00', customer:'장하윤', menu:'클리닉',      kind:'prepaid', voucher:'정액권 30만원', amount:80000,  seller:'박소현', performer:'박소현', done:false, give:0, pct:null },
@@ -228,7 +228,7 @@ function C_StaffSubPage() {
             <div style={{flex:1, minWidth:0}}>
               <div style={{fontSize:13.5, fontWeight:700, color:C_INK}}>양도 비율 · 전체 설정</div>
               <div style={{fontSize:12.5, color:C_MUTED, marginTop:4, lineHeight:1.5}}>
-                여기에 쓰면 아래 정산 건 오른쪽에 같은 비율이 들어가요. 건마다 다시 고칠 수 있어요.
+                여기에 쓰면 대체입력 오른쪽 비율에 같은 숫자가 들어가요. 건마다 다시 고칠 수 있어요.
               </div>
             </div>
             <div style={{display:'flex', alignItems:'center', gap:6, flexShrink:0}}>
@@ -286,13 +286,13 @@ function C_StaffSubPage() {
               <colgroup>
                 <col style={{width:36}}/>
                 <col style={{width:58}}/>
-                <col style={{width:196}}/>
-                <col style={{width:84}}/>
+                <col style={{width:180}}/>
+                <col style={{width:80}}/>
+                <col style={{width:88}}/>
                 <col style={{width:76}}/>
-                <col style={{width:76}}/>
-                <col style={{width:108}}/>
+                <col style={{width:72}}/>
                 <col style={{width:84}}/>
-                <col/>
+                <col style={{width:78}}/>
               </colgroup>
               <thead>
                 <tr style={{background:'#FBFCFE', borderBottom:`1px solid ${C_BORDER}`}}>
@@ -302,9 +302,9 @@ function C_StaffSubPage() {
                   <th style={subThR}>사용금액</th>
                   <th style={subThL}>판매자</th>
                   <th style={subThL}>시술자</th>
-                  <th style={subThR}>양도 비율</th>
-                  <th style={subThR}/>
+                  <th style={subThR}>양도</th>
                   <th style={subTh}/>
+                  <th style={subThR}>비율</th>
                 </tr>
               </thead>
               <tbody>
@@ -337,28 +337,12 @@ function C_StaffSubPage() {
                       <td style={subTdL}><SubPerson name={r.performer} hot={target} tone="performer"/></td>
                       <td style={subTdR}>
                         {target ? (
-                          <div style={{display:'flex', flexDirection:'column', alignItems:'flex-end', gap:4}}>
-                            <span style={{display:'inline-flex', alignItems:'center', gap:4}}>
-                              <input
-                                value={r.pct == null ? pct : String(r.pct)}
-                                onChange={e => setRowPct(r.id, e.target.value)}
-                                onClick={e => e.stopPropagation()}
-                                style={{
-                                  width:46, height:26, padding:'0 6px', textAlign:'right',
-                                  border:`1px solid ${C_BORDER}`, borderRadius:6, fontSize:12.5, fontWeight:700,
-                                  color:C_INK, background:'#fff', fontFamily:'inherit', outline:'none',
-                                  fontVariantNumeric:'tabular-nums',
-                                }}
-                              />
-                              <span style={{fontSize:12, fontWeight:700, color:C_MUTED}}>%</span>
-                            </span>
-                            <div style={{fontWeight:800, color: r.done ? '#047857' : '#C2410C', fontVariantNumeric:'tabular-nums'}}>{subWon(give)}</div>
-                          </div>
+                          <div style={{fontWeight:800, color: r.done ? '#047857' : '#C2410C', fontVariantNumeric:'tabular-nums'}}>{subWon(give)}</div>
                         ) : (
                           <span style={{color:'#94A3B8'}}>—</span>
                         )}
                       </td>
-                      <td style={subTdR}>
+                      <td style={{...subTdR, textAlign:'right'}}>
                         {!target && <span style={{fontSize:11.5, color:C_MUTED, fontWeight:600}}>본인 시술</span>}
                         {target && !r.done && (
                           <button onClick={() => enterRows([r.id])} style={{
@@ -370,7 +354,25 @@ function C_StaffSubPage() {
                           <button onClick={() => undo(r.id)} style={{...c_ghostBtnSm, fontFamily:'inherit', color:'#047857', borderColor:'#A7F3D0', background:'#fff'}}>취소</button>
                         )}
                       </td>
-                      <td style={subTd}/>
+                      <td style={subTdR}>
+                        {target ? (
+                          <span style={{display:'inline-flex', alignItems:'center', gap:3}}>
+                            <input
+                              value={r.pct == null ? pct : String(r.pct)}
+                              onChange={e => setRowPct(r.id, e.target.value)}
+                              style={{
+                                width:42, height:26, padding:'0 6px', textAlign:'right',
+                                border:`1px solid ${C_BORDER}`, borderRadius:6, fontSize:12.5, fontWeight:700,
+                                color:C_INK, background:'#fff', fontFamily:'inherit', outline:'none',
+                                fontVariantNumeric:'tabular-nums',
+                              }}
+                            />
+                            <span style={{fontSize:12, fontWeight:700, color:C_MUTED}}>%</span>
+                          </span>
+                        ) : (
+                          <span style={{color:'#94A3B8'}}>—</span>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -423,15 +425,22 @@ function SubKind({ kind }) {
   );
 }
 
+function subResigned(name) {
+  return (window.STAFF || []).some(s => (s.name === name || s.designerName === name) && s.status === 'resigned');
+}
 function SubPerson({ name, hot, tone }) {
   const seller = tone === 'seller';
+  const gone = seller && subResigned(name);
   return (
-    <span style={{
-      display:'inline-block', height:22, lineHeight:'22px', padding:'0 6px', marginLeft:-6, borderRadius:11,
-      fontSize:12.5, fontWeight:700, whiteSpace:'nowrap',
-      background: hot ? (seller ? '#F3EEFF' : '#EFF3FC') : 'transparent',
-      color: hot ? (seller ? '#6D28D9' : C_BLUE) : C_INK,
-    }}>{name}</span>
+    <span style={{display:'inline-flex', flexDirection:'column', alignItems:'flex-start', gap:2}}>
+      <span style={{
+        display:'inline-block', height:22, lineHeight:'22px', padding:'0 6px', marginLeft:-6, borderRadius:11,
+        fontSize:12.5, fontWeight:700, whiteSpace:'nowrap',
+        background: hot ? (seller ? '#F3EEFF' : '#EFF3FC') : 'transparent',
+        color: hot ? (seller ? '#6D28D9' : C_BLUE) : C_INK,
+      }}>{name}</span>
+      {gone && <span style={{fontSize:10.5, fontWeight:700, color:'#B45309', lineHeight:1.2}}>(퇴사자)</span>}
+    </span>
   );
 }
 

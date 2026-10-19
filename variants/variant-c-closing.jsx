@@ -99,6 +99,14 @@ function C_ClosingPage() {
           tab={tab} setTab={setTab}
           layout={layout} setLayout={setLayout}
           day={day} setDay={setDay}
+          subRows={handoff ? handoff.rows : []}
+          onSub={(iso) => {
+            if (window.SUB_HANDOFF) {
+              window.SUB_HANDOFF.focusFrom = iso;
+              window.SUB_HANDOFF.focusTo = iso;
+            }
+            if (window.__goPage) window.__goPage('staff-sub');
+          }}
         />
         <div style={{flex:1, overflow:'auto', padding:'16px 20px 24px'}}>
           {/* 브레드크럼 */}
@@ -110,14 +118,6 @@ function C_ClosingPage() {
               {tab === 'sales' ? '매출 마감' : tab === 'internal' ? '내수 마감' : '메타 매출'}
             </span>
           </div>
-
-          <C_ClosingSubNotice day={day} rows={handoff ? handoff.rows : []} onOpen={(iso) => {
-            if (window.SUB_HANDOFF) {
-              window.SUB_HANDOFF.focusFrom = iso;
-              window.SUB_HANDOFF.focusTo = iso;
-            }
-            if (window.__goPage) window.__goPage('staff-sub');
-          }}/>
 
           {/* KPI 스트립 */}
           <C_ClosingKPIs book={book} spot={spot} onHover={setHover} onToggle={toggleSpot}/>
@@ -148,39 +148,18 @@ function C_ClosingPage() {
   );
 }
 
-function C_ClosingSubNotice({ day, rows, onOpen }) {
-  const count = (iso) => (rows || []).filter(r => r.date === iso && r.seller !== r.performer && !r.done).length;
-  const todayN = count(CLOSING_APP_TODAY);
-  const dayN = day === CLOSING_APP_TODAY ? 0 : count(day);
-  if (!todayN && !dayN) return null;
-  const openToday = todayN > 0;
-  return (
-    <div style={{
-      marginBottom:14, padding:'12px 14px', borderRadius:12,
-      background:'#FFF7ED', border:'1px solid #FED7AA',
-      display:'flex', alignItems:'center', gap:12,
-    }}>
-      <div style={{flex:1, minWidth:0}}>
-        {todayN > 0 && (
-          <div style={{fontSize:13, fontWeight:800, color:'#9A3412'}}>오늘 아직 대체입력할 시술이 {todayN}건 있어요</div>
-        )}
-        {dayN > 0 && (
-          <div style={{fontSize:13, fontWeight:800, color:'#9A3412', marginTop: todayN ? 4 : 0}}>
-            {closingLabel(day)}에도 대체입력할 시술이 {dayN}건 있어요
-          </div>
-        )}
-        <div style={{fontSize:12, color:'#C2410C', marginTop:3}}>판매자와 시술자가 다른 정액권·티켓 시술입니다.</div>
-      </div>
-      <button onClick={() => onOpen(openToday ? CLOSING_APP_TODAY : day)} style={{
-        height:32, padding:'0 12px', border:'none', borderRadius:8, cursor:'pointer', fontFamily:'inherit',
-        background:'#C2410C', color:'#fff', fontSize:12.5, fontWeight:700, flexShrink:0,
-      }}>대체현황에서 입력</button>
-    </div>
-  );
+function closingSubPending(rows, iso) {
+  return (rows || []).filter(r => r.date === iso && r.seller !== r.performer && !r.done).length;
 }
 
 // ─ 서브헤더 ─
-function C_ClosingSubHeader({ tab, setTab, layout, setLayout, day, setDay }) {
+function C_ClosingSubHeader({ tab, setTab, layout, setLayout, day, setDay, subRows, onSub }) {
+  const todayN = closingSubPending(subRows, CLOSING_APP_TODAY);
+  const dayN = day === CLOSING_APP_TODAY ? 0 : closingSubPending(subRows, day);
+  const n = todayN || dayN;
+  const tip = todayN && dayN
+    ? `오늘 대체입력 ${todayN}건 · 이 날짜 ${dayN}건`
+    : todayN ? `오늘 대체입력 ${todayN}건` : `이 날짜 대체입력 ${dayN}건`;
   return (
     <div style={{
       display:'flex', alignItems:'center', gap:8,
@@ -198,6 +177,16 @@ function C_ClosingSubHeader({ tab, setTab, layout, setLayout, day, setDay }) {
         </div>
         <button onClick={() => setDay(closingShift(day, 1))} style={c_iconBtnSm}><IconChevronR size={14}/></button>
         <button onClick={() => setDay(CLOSING_APP_TODAY)} style={{...c_ghostBtnSm, marginLeft:2}}>오늘</button>
+        {n > 0 && (
+          <button onClick={() => onSub(todayN ? CLOSING_APP_TODAY : day)} title={tip} style={{
+            height:28, padding:'0 8px 0 7px', marginLeft:4, borderRadius:14, cursor:'pointer', fontFamily:'inherit',
+            border:'1px solid #FDBA74', background:'#FFF7ED', color:'#C2410C',
+            display:'inline-flex', alignItems:'center', gap:4, flexShrink:0,
+          }}>
+            <IconBell size={14} stroke={2}/>
+            <span style={{fontSize:12, fontWeight:800, fontVariantNumeric:'tabular-nums'}}>{n}</span>
+          </button>
+        )}
       </div>
 
       <div style={{flex:1}}/>
