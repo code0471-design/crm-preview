@@ -373,7 +373,7 @@ const TAB_SCHEMAS = {
     cols: [
       { key:'price',     label:'판매가',   w:'110px', type:'money' },
       { key:'credit',    label:'적립',     w:'110px', type:'money' },
-      { key:'validDays', label:'유효기간', w:'80px',  type:'days' },
+      { key:'validDays', label:'사용기간', w:'80px',  type:'days' },
     ],
   },
   ticket: {
@@ -806,8 +806,82 @@ function C_Toggle({ checked, onChange, colorOn }) {
   );
 }
 
+// ─ 정액권 등록 ─
+function C_MembershipModal({ onClose }) {
+  const [name, setName] = React.useState('');
+  const [price, setPrice] = React.useState('');
+  const [credit, setCredit] = React.useState('');
+  const [days, setDays] = React.useState('');
+  const [expire, setExpire] = React.useState(false);
+  const [expireMode, setExpireMode] = React.useState('bonus');
+
+  const field = (label, value, setValue, unit, required) => (
+    <div style={{display:'grid', gridTemplateColumns:'72px 1fr', alignItems:'center', gap:12}}>
+      <label style={{fontSize:12, fontWeight:600, color:C_INK}}>{label}{required && <span style={{color:'#EF4444'}}> *</span>}</label>
+      <div style={{position:'relative'}}>
+        <input value={value} onChange={e => setValue(e.target.value)} type={label === '메뉴명' ? 'text' : 'number'} placeholder={label === '메뉴명' ? '정액권 이름을 입력하세요' : '0'} style={{...c_modalInput, width:'100%', paddingRight: unit ? 32 : 12, textAlign: label === '메뉴명' ? 'left' : 'right'}}/>
+        {unit && <span style={{position:'absolute', right:10, top:8, fontSize:12, color:C_MUTED}}>{unit}</span>}
+      </div>
+    </div>
+  );
+
+  return (
+    <div onClick={onClose} style={{position:'fixed', inset:0, background:'rgba(11,20,37,0.4)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center'}}>
+      <div onClick={e => e.stopPropagation()} style={{width:440, background:C_SURFACE, borderRadius:12, boxShadow:'0 16px 48px rgba(11,20,37,0.25)', overflow:'hidden'}}>
+        <div style={{padding:'16px 20px 12px', borderBottom:`1px solid ${C_BORDER}`, display:'flex', alignItems:'center', justifyContent:'space-between'}}>
+          <div style={{fontSize:15, fontWeight:700, color:C_INK, letterSpacing:'-0.01em'}}>정액권 등록</div>
+          <button onClick={onClose} style={{background:'none', border:'none', color:C_MUTED, cursor:'pointer', display:'flex'}}><IconX size={16}/></button>
+        </div>
+        <div style={{padding:'18px 20px', display:'flex', flexDirection:'column', gap:14}}>
+          {field('메뉴명', name, setName, '', true)}
+          {field('가격', price, setPrice, '원')}
+          {field('적립액', credit, setCredit, '원')}
+          {field('사용기간', days, setDays, '일')}
+          <button onClick={() => setExpire(v => !v)} style={{
+            display:'flex', alignItems:'center', gap:8, border:'none', background:'transparent',
+            padding:0, cursor:'pointer', fontFamily:'inherit', textAlign:'left',
+          }}>
+            <span style={{
+              width:16, height:16, borderRadius:4, flexShrink:0,
+              border:`1.5px solid ${expire ? C_BLUE : '#CBD5E1'}`,
+              background: expire ? C_BLUE : C_SURFACE,
+              color:'#fff', display:'inline-flex', alignItems:'center', justifyContent:'center',
+            }}>{expire && <IconCheck size={11} stroke={3}/>}</span>
+            <span style={{fontSize:12.5, fontWeight:700, color:C_INK}}>일정 만료시 정액권 소멸</span>
+          </button>
+          {expire && (
+            <div style={{display:'flex', flexDirection:'column', gap:8, paddingLeft:24}}>
+              {[
+                { id:'bonus', label:'추가적립금만 소멸' },
+                { id:'all', label:'전체 적립금 소멸' },
+              ].map(opt => (
+                <button key={opt.id} onClick={() => setExpireMode(opt.id)} style={{
+                  display:'flex', alignItems:'center', gap:8, border:'none', background:'transparent',
+                  padding:0, cursor:'pointer', fontFamily:'inherit', textAlign:'left',
+                }}>
+                  <span style={{
+                    width:16, height:16, borderRadius:'50%', boxSizing:'border-box', flexShrink:0,
+                    border: expireMode === opt.id ? `5px solid ${C_BLUE}` : '1.5px solid #CBD5E1',
+                    background:C_SURFACE,
+                  }}/>
+                  <span style={{fontSize:12.5, fontWeight: expireMode === opt.id ? 700 : 500, color: expireMode === opt.id ? C_INK : C_MUTED}}>{opt.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div style={{padding:'12px 20px', borderTop:`1px solid ${C_BORDER}`, background:'#FBFCFE', display:'flex', gap:8, justifyContent:'flex-end'}}>
+          <button onClick={onClose} style={{...c_ghostBtn, padding:'8px 14px'}}>취소</button>
+          <button onClick={onClose} style={{padding:'8px 16px', background:C_BLUE, color:'#fff', border:'none', borderRadius:7, fontSize:13, fontWeight:600, cursor:'pointer'}}>저장</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─ 메뉴 등록 모달 ─
 function C_MenuModal({ tab, tabLabel, categories, defaultCat, onClose }) {
+  if (tab === 'membership') return <C_MembershipModal onClose={onClose}/>;
   categories = categories || MENU_CATEGORIES;
   const [category, setCategory] = React.useState(defaultCat);
   const [name, setName] = React.useState('');
