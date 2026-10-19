@@ -1,137 +1,102 @@
-// 분석 › 고객 분석 — 재방문, 이탈
+// 분석 › 고객 분석 — 등록 고객의 방문 횟수, 최근 방문, 누적 결제
 const {
   C_BLUE, C_BLUE_SOFT, C_INK, C_MUTED, C_BORDER, C_BG, C_SURFACE,
 } = window;
 
-const CA_PRESETS = [
-  { id:'month', label:'이번 달', from:'2026.09.01', to:'2026.09.21', test:v => v.days <= 20, prev:v => v.days >= 21 && v.days <= 51, prevLabel:'지난달' },
-  { id:'last',  label:'지난달', from:'2026.08.01', to:'2026.08.31', test:v => v.days >= 21 && v.days <= 51, prev:v => v.days >= 52 && v.days <= 82, prevLabel:'그 전달' },
-  { id:'q',     label:'최근 3개월', from:'2026.06.23', to:'2026.09.21', test:v => v.days <= 90 },
-  { id:'all',   label:'전체', from:'', to:'2026.09.21', test:() => true },
+const CA_TODAY = '2026.09.21';
+const CA_GRADES = [
+  { id:'일반', rule:'70만 미만', color:'#64748B', bg:'#F1F5F9' },
+  { id:'VIP', rule:'70만 이상', color:'#1E40AF', bg:'#EFF3FC' },
+  { id:'VVIP', rule:'180만 이상', color:'#B45309', bg:'#FFFBEB' },
 ];
-const CA_ST = {
-  back: { label:'기간 안 재방문', color:'#059669', bg:'#ECFDF5' },
-  late: { label:'기간 후 재방문', color:'#0D9488', bg:'#F0FDFA' },
-  wait: { label:'주기 전',       color:'#64748B', bg:'#F1F5F9' },
-  due:  { label:'지금 연락할 때', color:'#D97706', bg:'#FFFBEB' },
-  risk: { label:'이탈 위험',      color:'#DC2626', bg:'#FEF2F2' },
-};
-const CA_ST_ORDER = { risk:0, due:1, late:2, back:3, wait:4 };
+const CA_REC = [
+  { id:'d30', name:'30일 이내', test:c => c.lastDays <= 30 },
+  { id:'d90', name:'31–90일', test:c => c.lastDays > 30 && c.lastDays <= 90 },
+  { id:'d180', name:'91–180일', test:c => c.lastDays > 90 && c.lastDays <= 180 },
+  { id:'old', name:'180일 넘음', test:c => c.lastDays > 180 },
+];
+const CA_FREQ = [
+  { id:'once', name:'첫 방문', test:c => c.visits === 1 },
+  { id:'few', name:'2–4회', test:c => c.visits >= 2 && c.visits <= 4 },
+  { id:'mid', name:'5–9회', test:c => c.visits >= 5 && c.visits <= 9 },
+  { id:'loyal', name:'10회 이상', test:c => c.visits >= 10 },
+];
 
 function caPct(a, b) { return b ? Math.round((a / b) * 1000) / 10 : 0; }
-function caDate(days) {
-  const d = new Date(2026, 8, 21);
-  d.setDate(d.getDate() - days);
-  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
-}
+function caWon(n) { return new Intl.NumberFormat('ko-KR').format(Math.round(n || 0)); }
 function caDes(id) {
   return (window.DESIGNERS || []).find(d => d.id === id) || { id, name:id === 'unassigned' ? '미지정' : id, role:'', color:'#94A3B8' };
 }
-function caCat(id) {
-  return ((window.MENU_CATEGORIES || []).find(c => c.id === id) || {}).name || id;
-}
-function caEnrich() {
-  const cycles = window.RV_DEFAULT_CYCLE || {};
-  return (window.RV_VISITS || []).map(v => {
-    const cycle = cycles[v.cat] || 60;
-    const limit = cycle * 1.5;
-    let st = 'risk';
-    if (v.after != null) st = v.after <= limit ? 'back' : 'late';
-    else if (v.days < cycle) st = 'wait';
-    else if (v.days < limit) st = 'due';
-    return { ...v, cycle, st };
-  });
-}
+function caTicket(c) { return c.visits ? Math.round(c.totalPaid / c.visits) : 0; }
 function caPack(rows) {
-  const back = rows.filter(v => v.st === 'back').length;
-  const late = rows.filter(v => v.st === 'late').length;
-  const due = rows.filter(v => v.st === 'due').length;
-  const risk = rows.filter(v => v.st === 'risk').length;
-  const wait = rows.filter(v => v.st === 'wait').length;
-  const fresh = rows.filter(v => v.isNew).length;
-  const returned = rows.filter(v => v.after != null);
-  const avg = returned.length ? Math.round(returned.reduce((a, v) => a + v.after, 0) / returned.length) : 0;
-  const switched = returned.filter(v => v.same === false).length;
-  const ready = back + late + due + risk;
-  return { n:rows.length, back, late, due, risk, wait, fresh, avg, switched, ready, rate: ready ? caPct(back, ready) : null };
+  const pay = rows.reduce((a, c) => a + c.totalPaid, 0);
+  const visits = rows.reduce((a, c) => a + c.visits, 0);
+  return {
+    n: rows.length,
+    pay,
+    visits,
+    ticket: visits ? Math.round(pay / visits) : 0,
+    d30: rows.filter(c => c.lastDays <= 30).length,
+    old: rows.filter(c => c.lastDays > 180).length,
+    loyal: rows.filter(c => c.visits >= 10).length,
+  };
 }
 
 function C_CustomerPage() {
-  const [preset, setPreset] = React.useState('q');
   const [designer, setDesigner] = React.useState('all');
-  const [cat, setCat] = React.useState('all');
-  const [status, setStatus] = React.useState('all');
-  const [freshOnly, setFreshOnly] = React.useState(false);
+  const [grade, setGrade] = React.useState('all');
+  const [rec, setRec] = React.useState('all');
+  const [freq, setFreq] = React.useState('all');
+  const [topOn, setTopOn] = React.useState(false);
   const [shown, setShown] = React.useState(40);
-  const all = React.useMemo(() => caEnrich(), []);
-  const range = CA_PRESETS.find(p => p.id === preset);
-  const period = all.filter(range.test);
-  const periodPack = caPack(period);
-  const scoped = designer === 'all' ? period : period.filter(v => v.designer === designer);
-  const pack = caPack(scoped);
-  const prevPack = range.prev ? caPack(all.filter(range.prev).filter(v => designer === 'all' || v.designer === designer)) : null;
-  const delta = prevPack && pack.rate != null && prevPack.rate != null ? Math.round((pack.rate - prevPack.rate) * 10) / 10 : null;
+  const people = React.useMemo(() => (window.MKT_CUSTOMERS || []).slice(), []);
+  const book = designer === 'all' ? people : people.filter(c => c.designer === designer);
+  const pack = caPack(book);
+  const allPack = caPack(people);
+  const ranked = book.slice().sort((a, b) => b.totalPaid - a.totalPaid);
+  const topN = Math.max(1, Math.ceil(book.length * 0.1));
+  const topIds = new Set(ranked.slice(0, topN).map(c => c.id));
+  const topPay = ranked.slice(0, topN).reduce((a, c) => a + c.totalPaid, 0);
+  const topShare = caPct(topPay, pack.pay);
 
   const desRows = React.useMemo(() => {
     const map = {};
-    period.forEach(v => {
-      if (!map[v.designer]) map[v.designer] = [];
-      map[v.designer].push(v);
+    people.forEach(c => {
+      if (!map[c.designer]) map[c.designer] = [];
+      map[c.designer].push(c);
     });
     return Object.keys(map).map(id => ({ des:caDes(id), ...caPack(map[id]) })).sort((a, b) => b.n - a.n);
-  }, [period]);
-  const catRows = React.useMemo(() => {
-    const map = {};
-    scoped.forEach(v => {
-      if (!map[v.cat]) map[v.cat] = [];
-      map[v.cat].push(v);
-    });
-    return Object.keys(map).map(id => ({ id, name:caCat(id), cycle:(window.RV_DEFAULT_CYCLE || {})[id] || 60, ...caPack(map[id]) })).sort((a, b) => b.n - a.n);
-  }, [scoped]);
+  }, [people]);
 
-  const list = scoped.filter(v => {
-    if (cat !== 'all' && v.cat !== cat) return false;
-    if (status !== 'all' && v.st !== status) return false;
-    if (freshOnly && !v.isNew) return false;
+  const list = book.filter(c => {
+    if (grade !== 'all' && c.grade !== grade) return false;
+    if (rec !== 'all' && !CA_REC.find(r => r.id === rec).test(c)) return false;
+    if (freq !== 'all' && !CA_FREQ.find(f => f.id === freq).test(c)) return false;
+    if (topOn && !topIds.has(c.id)) return false;
     return true;
-  }).sort((a, b) => (CA_ST_ORDER[a.st] - CA_ST_ORDER[b.st]) || (b.days - a.days));
+  }).sort((a, b) => b.totalPaid - a.totalPaid);
 
-  const ranked = desRows.filter(d => d.ready >= 8 && d.rate != null).slice().sort((a, b) => b.rate - a.rate);
-  const best = ranked[0];
-  const weak = ranked[ranked.length - 1];
-  const fromLabel = preset === 'all' && period.length ? caDate(Math.max(...period.map(v => v.days))) : range.from;
-
-  const pickStatus = (id) => { setFreshOnly(false); setStatus(s => s === id ? 'all' : id); setShown(40); };
-  const clearAll = () => { setDesigner('all'); setCat('all'); setStatus('all'); setFreshOnly(false); setShown(40); };
-
+  const resetList = () => setShown(40);
+  const clearAll = () => { setDesigner('all'); setGrade('all'); setRec('all'); setFreq('all'); setTopOn(false); setShown(40); };
   const chips = [];
   if (designer !== 'all') chips.push({ k:'des', label:caDes(designer).name });
-  if (cat !== 'all') chips.push({ k:'cat', label:caCat(cat) });
-  if (freshOnly) chips.push({ k:'new', label:'신규' });
-  if (status !== 'all') chips.push({ k:'st', label:CA_ST[status].label });
+  if (grade !== 'all') chips.push({ k:'grade', label:grade });
+  if (rec !== 'all') chips.push({ k:'rec', label:CA_REC.find(r => r.id === rec).name });
+  if (freq !== 'all') chips.push({ k:'freq', label:CA_FREQ.find(f => f.id === freq).name });
+  if (topOn) chips.push({ k:'top', label:'결제 상위 10%' });
 
   return (
     <div style={{flex:1, display:'flex', flexDirection:'column', minWidth:0, overflow:'hidden', background:C_BG}}>
       <div style={{width:'100%', flex:1, display:'flex', flexDirection:'column', minWidth:0, minHeight:0}}>
         <div style={{display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', padding:'10px 14px', background:C_SURFACE, borderBottom:`1px solid ${C_BORDER}`}}>
-          <span style={{fontSize:12.5, color:C_MUTED, fontWeight:600}}>기간</span>
-          <div style={caDateBox}>{fromLabel}</div>
-          <span style={{color:C_MUTED, fontSize:12}}>~</span>
-          <div style={caDateBox}>{range.to}</div>
-          <div style={{display:'flex', gap:4}}>
-            {CA_PRESETS.map(p => {
-              const on = preset === p.id;
-              return (
-                <button key={p.id} onClick={() => { setPreset(p.id); setShown(40); }} style={caChip(on)}>{p.label}</button>
-              );
-            })}
-          </div>
+          <span style={{fontSize:12.5, color:C_MUTED, fontWeight:600}}>기준일</span>
+          <div style={caDateBox}>{CA_TODAY}</div>
+          <span style={{fontSize:12, color:C_MUTED, fontWeight:600}}>등록 고객</span>
           <div style={{flex:1}}/>
-          <select value={designer} onChange={e => { setDesigner(e.target.value); setShown(40); }} style={caSelect}>
+          <select value={designer} onChange={e => { setDesigner(e.target.value); resetList(); }} style={caSelect}>
             <option value="all">전체 담당자</option>
             {desRows.map(d => <option key={d.des.id} value={d.des.id}>{d.des.name}</option>)}
           </select>
-          <button onClick={() => window.__goPage && window.__goPage('mkt-revisit')} style={caGhost}>재방문율에서 문자</button>
         </div>
 
         <div style={{flex:1, overflow:'auto', padding:'16px 20px 28px'}}>
@@ -141,23 +106,12 @@ function C_CustomerPage() {
             <span style={{color:C_INK, fontWeight:700}}>고객 분석</span>
           </div>
 
-          {best && weak && best.des.id !== weak.des.id && (
-            <div style={{fontSize:12.5, color:C_INK, fontWeight:600, marginBottom:12, lineHeight:1.5}}>
-              {best.des.name} 재방문율 {best.rate}% · {weak.des.name} {weak.rate}%
-            </div>
-          )}
-
           <div style={{display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:10, marginBottom:12}}>
-            <CaKpi label="방문 고객" value={`${pack.n.toLocaleString()}명`} sub={`신규 ${pack.fresh.toLocaleString()}명`} on={!freshOnly && status === 'all'} onClick={() => { setFreshOnly(false); setStatus('all'); setShown(40); }}/>
-            <CaKpi label="신규" value={`${pack.fresh.toLocaleString()}명`} sub={pack.n ? `방문의 ${caPct(pack.fresh, pack.n)}%` : '—'} on={freshOnly} onClick={() => { setStatus('all'); setFreshOnly(v => !v); setShown(40); }}/>
-            <CaKpi label="재방문율" value={pack.rate == null ? '—' : `${pack.rate}%`} sub={pack.rate == null ? `관찰 중 ${pack.wait.toLocaleString()}명` : (delta == null ? `주기 안에 ${pack.back.toLocaleString()}명` : `${range.prevLabel}보다 ${delta > 0 ? '+' : ''}${delta}%p`)} accent={C_BLUE} on={status === 'back'} onClick={() => pickStatus('back')}/>
-            <CaKpi label="지금 연락할 때" value={`${pack.due.toLocaleString()}명`} sub="권장 주기는 지났고, 이탈 전" accent="#D97706" on={status === 'due'} onClick={() => pickStatus('due')}/>
-            <CaKpi label="이탈 위험" value={`${pack.risk.toLocaleString()}명`} sub="권장 주기의 1.5배를 넘김" accent="#DC2626" on={status === 'risk'} onClick={() => pickStatus('risk')}/>
-          </div>
-          <div style={{fontSize:11.5, color:C_MUTED, marginBottom:14, lineHeight:1.45}}>
-            {pack.ready === 0
-              ? '이 기간에 온 고객은 아직 권장 주기 전이라 재방문율을 내지 않습니다.'
-              : '재방문율은 권장 주기가 이미 지난 고객만 나눕니다. 아직 주기 전인 고객은 빼 두었습니다.'}
+            <CaKpi label="등록 고객" value={`${pack.n.toLocaleString()}명`} sub={`10회 이상 ${pack.loyal.toLocaleString()}명`} on={!topOn && rec === 'all' && grade === 'all' && freq === 'all'} onClick={clearAll}/>
+            <CaKpi label="30일 이내" value={`${pack.d30.toLocaleString()}명`} sub={pack.n ? `전체의 ${caPct(pack.d30, pack.n)}%` : '—'} on={rec === 'd30'} onClick={() => { setRec(rec === 'd30' ? 'all' : 'd30'); resetList(); }}/>
+            <CaKpi label="180일 넘음" value={`${pack.old.toLocaleString()}명`} sub={pack.n ? `전체의 ${caPct(pack.old, pack.n)}%` : '—'} accent="#DC2626" on={rec === 'old'} onClick={() => { setRec(rec === 'old' ? 'all' : 'old'); resetList(); }}/>
+            <CaKpi label="객단가" value={`${caWon(pack.ticket)}원`} sub="누적 결제 ÷ 방문 횟수"/>
+            <CaKpi label="결제 상위 10%" value={`${topShare}%`} sub={`${topN.toLocaleString()}명`} accent={C_BLUE} on={topOn} onClick={() => { setTopOn(v => !v); resetList(); }}/>
           </div>
 
           {chips.length > 0 && (
@@ -165,10 +119,11 @@ function C_CustomerPage() {
               {chips.map(c => (
                 <button key={c.k} onClick={() => {
                   if (c.k === 'des') setDesigner('all');
-                  if (c.k === 'cat') setCat('all');
-                  if (c.k === 'new') setFreshOnly(false);
-                  if (c.k === 'st') setStatus('all');
-                  setShown(40);
+                  if (c.k === 'grade') setGrade('all');
+                  if (c.k === 'rec') setRec('all');
+                  if (c.k === 'freq') setFreq('all');
+                  if (c.k === 'top') setTopOn(false);
+                  resetList();
                 }} style={{...caChip(true), display:'inline-flex', alignItems:'center', gap:4}}>
                   {c.label} <span style={{fontWeight:700}}>×</span>
                 </button>
@@ -178,29 +133,29 @@ function C_CustomerPage() {
           )}
 
           <div style={{display:'grid', gridTemplateColumns:'1.35fr 1fr', gap:12, marginBottom:12, alignItems:'start'}}>
-            <CaCard title="담당자별" sub="이 기간에 방문한 고객">
+            <CaCard title="담당자별" sub="맡고 있는 고객과 누적 결제">
               <table style={caTable}>
                 <thead>
                   <tr>
                     <th style={caThL}>담당자</th>
-                    <th style={caTh}>방문</th>
-                    <th style={caTh}>신규</th>
-                    <th style={caTh}>재방문율</th>
-                    <th style={caTh}>연락</th>
-                    <th style={caTh}>이탈</th>
+                    <th style={caTh}>고객</th>
+                    <th style={caTh}>30일 이내</th>
+                    <th style={caTh}>180일 넘음</th>
+                    <th style={caTh}>누적 결제</th>
+                    <th style={caTh}>객단가</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr onClick={() => { setDesigner('all'); setShown(40); }} style={{cursor:'pointer', background: designer === 'all' ? C_BLUE_SOFT : 'transparent'}}>
+                  <tr onClick={() => { setDesigner('all'); resetList(); }} style={{cursor:'pointer', background: designer === 'all' ? C_BLUE_SOFT : 'transparent'}}>
                     <td style={{...caTdL, fontWeight:700}}>전체</td>
-                    <td style={caTd}>{periodPack.n.toLocaleString()}</td>
-                    <td style={caTd}>{periodPack.fresh.toLocaleString()}</td>
-                    <td style={caTd}><CaRate rate={periodPack.rate}/></td>
-                    <td style={{...caTd, color:'#D97706', fontWeight:700}}>{periodPack.due.toLocaleString()}</td>
-                    <td style={{...caTd, color:'#DC2626', fontWeight:700}}>{periodPack.risk.toLocaleString()}</td>
+                    <td style={caTd}>{allPack.n.toLocaleString()}</td>
+                    <td style={caTd}>{allPack.d30.toLocaleString()}</td>
+                    <td style={{...caTd, color:'#DC2626', fontWeight:700}}>{allPack.old.toLocaleString()}</td>
+                    <td style={caTd}>{caWon(allPack.pay)}</td>
+                    <td style={{...caTd, fontWeight:700}}>{caWon(allPack.ticket)}</td>
                   </tr>
                   {desRows.map(d => (
-                    <tr key={d.des.id} onClick={() => { setDesigner(d.des.id); setShown(40); }} style={{cursor:'pointer', background: designer === d.des.id ? C_BLUE_SOFT : 'transparent'}}>
+                    <tr key={d.des.id} onClick={() => { setDesigner(d.des.id); resetList(); }} style={{cursor:'pointer', background: designer === d.des.id ? C_BLUE_SOFT : 'transparent'}}>
                       <td style={caTdL}>
                         <span style={{display:'inline-flex', alignItems:'center', gap:6}}>
                           <span style={{width:3, height:12, borderRadius:2, background:d.des.color}}/>
@@ -209,87 +164,134 @@ function C_CustomerPage() {
                         </span>
                       </td>
                       <td style={caTd}>{d.n.toLocaleString()}</td>
-                      <td style={caTd}>{d.fresh.toLocaleString()}</td>
-                      <td style={caTd}><CaRate rate={d.rate}/></td>
-                      <td style={{...caTd, color: d.due ? '#D97706' : '#CBD5E1', fontWeight: d.due ? 700 : 500}}>{d.due.toLocaleString()}</td>
-                      <td style={{...caTd, color: d.risk ? '#DC2626' : '#CBD5E1', fontWeight: d.risk ? 700 : 500}}>{d.risk.toLocaleString()}</td>
+                      <td style={caTd}>{d.d30.toLocaleString()}</td>
+                      <td style={{...caTd, color: d.old ? '#DC2626' : '#CBD5E1', fontWeight: d.old ? 700 : 500}}>{d.old.toLocaleString()}</td>
+                      <td style={caTd}>{caWon(d.pay)}</td>
+                      <td style={{...caTd, fontWeight:700}}>{caWon(d.ticket)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </CaCard>
 
-            <div>
-              <CaCard title="시술별" sub="권장 주기 안에 다시 왔는지">
+            <div style={{display:'flex', flexDirection:'column', gap:12}}>
+              <CaCard title="등급" sub="누적 결제 기준">
                 <table style={caTable}>
                   <thead>
                     <tr>
-                      <th style={caThL}>시술</th>
-                      <th style={caTh}>주기</th>
-                      <th style={caTh}>방문</th>
-                      <th style={caTh}>재방문율</th>
-                      <th style={caTh}>이탈</th>
+                      <th style={caThL}>등급</th>
+                      <th style={caThL}>기준</th>
+                      <th style={caTh}>고객</th>
+                      <th style={caTh}>결제 비중</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr onClick={() => { setCat('all'); setShown(40); }} style={{cursor:'pointer', background: cat === 'all' ? C_BLUE_SOFT : 'transparent'}}>
+                    <tr onClick={() => { setGrade('all'); resetList(); }} style={{cursor:'pointer', background: grade === 'all' ? C_BLUE_SOFT : 'transparent'}}>
                       <td style={{...caTdL, fontWeight:700}}>전체</td>
-                      <td style={caTd}>—</td>
-                      <td style={caTd}>{scoped.length.toLocaleString()}</td>
-                      <td style={caTd}>{pack.rate == null ? '—' : `${pack.rate}%`}</td>
-                      <td style={{...caTd, color:'#DC2626', fontWeight:700}}>{pack.risk.toLocaleString()}</td>
+                      <td style={{...caTdL, color:C_MUTED}}>—</td>
+                      <td style={caTd}>{pack.n.toLocaleString()}</td>
+                      <td style={caTd}>100%</td>
                     </tr>
-                    {catRows.map(c => (
-                      <tr key={c.id} onClick={() => { setCat(c.id); setShown(40); }} style={{cursor:'pointer', background: cat === c.id ? C_BLUE_SOFT : 'transparent'}}>
-                        <td style={{...caTdL, fontWeight:700, color:C_INK}}>{c.name}</td>
-                        <td style={caTd}>{c.cycle}일</td>
-                        <td style={caTd}>{c.n.toLocaleString()}</td>
-                        <td style={{...caTd, fontWeight:700, color:C_INK}}>{c.rate == null ? '—' : `${c.rate}%`}</td>
-                        <td style={{...caTd, color: c.risk ? '#DC2626' : '#CBD5E1', fontWeight: c.risk ? 700 : 500}}>{c.risk.toLocaleString()}</td>
-                      </tr>
-                    ))}
+                    {CA_GRADES.map(g => {
+                      const rows = book.filter(c => c.grade === g.id);
+                      const pay = rows.reduce((a, c) => a + c.totalPaid, 0);
+                      return (
+                        <tr key={g.id} onClick={() => { setGrade(grade === g.id ? 'all' : g.id); resetList(); }} style={{cursor:'pointer', background: grade === g.id ? C_BLUE_SOFT : 'transparent'}}>
+                          <td style={caTdL}><span style={{fontWeight:800, color:g.color}}>{g.id}</span></td>
+                          <td style={{...caTdL, color:C_MUTED}}>{g.rule}</td>
+                          <td style={caTd}>{rows.length.toLocaleString()}</td>
+                          <td style={{...caTd, fontWeight:700}}>{caPct(pay, pack.pay)}%</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </CaCard>
+
+              <CaCard title="방문 횟수" sub="몇 번 온 고객에게 결제가 몰려 있는지">
+                <table style={caTable}>
+                  <thead>
+                    <tr>
+                      <th style={caThL}>구분</th>
+                      <th style={caTh}>고객</th>
+                      <th style={caTh}>고객 비중</th>
+                      <th style={caTh}>결제 비중</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr onClick={() => { setFreq('all'); resetList(); }} style={{cursor:'pointer', background: freq === 'all' ? C_BLUE_SOFT : 'transparent'}}>
+                      <td style={{...caTdL, fontWeight:700}}>전체</td>
+                      <td style={caTd}>{pack.n.toLocaleString()}</td>
+                      <td style={caTd}>100%</td>
+                      <td style={caTd}>100%</td>
+                    </tr>
+                    {CA_FREQ.map(f => {
+                      const rows = book.filter(f.test);
+                      const pay = rows.reduce((a, c) => a + c.totalPaid, 0);
+                      return (
+                        <tr key={f.id} onClick={() => { setFreq(freq === f.id ? 'all' : f.id); resetList(); }} style={{cursor:'pointer', background: freq === f.id ? C_BLUE_SOFT : 'transparent'}}>
+                          <td style={{...caTdL, fontWeight:700, color:C_INK}}>{f.name}</td>
+                          <td style={caTd}>{rows.length.toLocaleString()}</td>
+                          <td style={caTd}>{caPct(rows.length, pack.n)}%</td>
+                          <td style={{...caTd, fontWeight:700}}>{caPct(pay, pack.pay)}%</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </CaCard>
             </div>
           </div>
 
-          <CaCard title="고객" sub={`${list.length.toLocaleString()}명`}>
+          <div style={{display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:8, marginBottom:12}}>
+            {CA_REC.map(r => {
+              const n = book.filter(r.test).length;
+              const on = rec === r.id;
+              return (
+                <button key={r.id} onClick={() => { setRec(on ? 'all' : r.id); resetList(); }} style={{
+                  textAlign:'left', cursor:'pointer', fontFamily:'inherit',
+                  border:`1.5px solid ${on ? C_BLUE : C_BORDER}`, borderRadius:10,
+                  background: on ? C_BLUE_SOFT : C_SURFACE, padding:'10px 12px',
+                }}>
+                  <div style={{fontSize:11.5, color:C_MUTED, fontWeight:700}}>{r.name}</div>
+                  <div style={{marginTop:4, fontSize:18, fontWeight:800, color: r.id === 'old' ? '#DC2626' : C_INK, fontVariantNumeric:'tabular-nums'}}>{n.toLocaleString()}<span style={{fontSize:12, fontWeight:700, marginLeft:2}}>명</span></div>
+                  <div style={{marginTop:2, fontSize:11, color:C_MUTED}}>{caPct(n, pack.n)}%</div>
+                </button>
+              );
+            })}
+          </div>
+
+          <CaCard title="고객" sub={`${list.length.toLocaleString()}명 · 누적 결제 큰 순`}>
             <table style={caTable}>
               <thead>
                 <tr>
                   <th style={caThL}>고객</th>
-                  <th style={caThL}>연락처</th>
+                  <th style={caThL}>등급</th>
                   <th style={caThL}>담당자</th>
-                  <th style={caThL}>시술</th>
-                  <th style={caTh}>기준 방문</th>
-                  <th style={caThL}>상태</th>
+                  <th style={caTh}>방문</th>
+                  <th style={caTh}>최근 방문</th>
+                  <th style={caTh}>누적 결제</th>
+                  <th style={caTh}>객단가</th>
                 </tr>
               </thead>
               <tbody>
-                {list.slice(0, shown).map(v => {
-                  const d = caDes(v.designer);
-                  const st = CA_ST[v.st];
+                {list.slice(0, shown).map(c => {
+                  const d = caDes(c.designer);
+                  const g = CA_GRADES.find(x => x.id === c.grade);
                   return (
-                    <tr key={v.id}>
-                      <td style={{...caTdL, fontWeight:700, color:C_INK}}>
-                        {v.name}
-                        {v.isNew && <span style={{marginLeft:6, fontSize:10, fontWeight:700, color:'#059669'}}>신규</span>}
-                      </td>
-                      <td style={{...caTdL, color:C_MUTED}}>{v.phone}</td>
+                    <tr key={c.id}>
+                      <td style={{...caTdL, fontWeight:700, color:C_INK}}>{c.name}</td>
+                      <td style={caTdL}><span style={{fontSize:11, fontWeight:800, color:g.color, background:g.bg, borderRadius:99, padding:'2px 7px'}}>{c.grade}</span></td>
                       <td style={caTdL}>{d.name}</td>
-                      <td style={caTdL}>{caCat(v.cat)}</td>
-                      <td style={caTd}>{caDate(v.days)}</td>
-                      <td style={caTdL}>
-                        <span style={{display:'inline-block', fontSize:11, fontWeight:700, color:st.color, background:st.bg, borderRadius:99, padding:'3px 8px'}}>
-                          {st.label}{v.after != null ? ` · ${v.after}일` : ` · ${v.days}일`}
-                        </span>
-                      </td>
+                      <td style={caTd}>{c.visits.toLocaleString()}회</td>
+                      <td style={{...caTd, color: c.lastDays > 180 ? '#DC2626' : C_INK}}>{c.lastDays}일 전</td>
+                      <td style={{...caTd, fontWeight:700}}>{caWon(c.totalPaid)}</td>
+                      <td style={caTd}>{caWon(caTicket(c))}</td>
                     </tr>
                   );
                 })}
                 {list.length === 0 && (
-                  <tr><td colSpan={6} style={{...caTdL, color:C_MUTED, padding:'22px 12px'}}>이 조건의 고객이 없습니다.</td></tr>
+                  <tr><td colSpan={7} style={{...caTdL, color:C_MUTED, padding:'22px 12px'}}>이 조건의 고객이 없습니다.</td></tr>
                 )}
               </tbody>
             </table>
@@ -308,7 +310,7 @@ function C_CustomerPage() {
 function CaKpi({ label, value, sub, on, onClick, accent }) {
   return (
     <button onClick={onClick} style={{
-      textAlign:'left', cursor:'pointer', fontFamily:'inherit',
+      textAlign:'left', cursor: onClick ? 'pointer' : 'default', fontFamily:'inherit',
       background: on ? C_BLUE_SOFT : C_SURFACE, border:`1.5px solid ${on ? C_BLUE : C_BORDER}`,
       borderRadius:12, padding:'12px 14px',
     }}>
@@ -316,17 +318,6 @@ function CaKpi({ label, value, sub, on, onClick, accent }) {
       <div style={{marginTop:6, fontSize:22, fontWeight:800, letterSpacing:'-0.03em', color: accent || C_INK, fontVariantNumeric:'tabular-nums', lineHeight:1.1}}>{value}</div>
       <div style={{marginTop:5, fontSize:11, color:C_MUTED, lineHeight:1.35}}>{sub}</div>
     </button>
-  );
-}
-function CaRate({ rate }) {
-  if (rate == null) return <span style={{color:C_MUTED, fontWeight:700}}>—</span>;
-  return (
-    <span style={{display:'inline-flex', alignItems:'center', gap:6, justifyContent:'flex-end'}}>
-      <span style={{width:54, height:6, borderRadius:99, background:'#EEF1F6', overflow:'hidden'}}>
-        <span style={{display:'block', width:`${Math.min(100, rate)}%`, height:'100%', background:C_BLUE}}/>
-      </span>
-      <span style={{minWidth:42, fontWeight:800, color:C_INK}}>{rate}%</span>
-    </span>
   );
 }
 function CaCard({ title, sub, children }) {
