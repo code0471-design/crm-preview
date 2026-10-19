@@ -7,11 +7,12 @@ const {
 
 // 5개 탭 스키마
 const MENU_TABS = [
-  { id:'service',  label:'시술',  categories:'MENU_CATEGORIES',    items:'MENU_ITEMS' },
-  { id:'product',  label:'제품',  categories:'PRODUCT_CATEGORIES', items:'PRODUCT_ITEMS' },
-  { id:'package',  label:'패키지',categories:'PACKAGE_CATEGORIES', items:'PACKAGE_ITEMS' },
-  { id:'custom',   label:'커스텀',categories:'CUSTOM_CATEGORIES',  items:'CUSTOM_ITEMS' },
-  { id:'discount', label:'할인',  categories:'DISCOUNT_CATEGORIES',items:'DISCOUNT_ITEMS' },
+  { id:'service',    label:'시술',     categories:'MENU_CATEGORIES',       items:'MENU_ITEMS' },
+  { id:'product',    label:'제품',     categories:'PRODUCT_CATEGORIES',    items:'PRODUCT_ITEMS' },
+  { id:'membership', label:'정액권',   categories:'MEMBERSHIP_CATEGORIES', items:'MEMBERSHIP_ITEMS' },
+  { id:'ticket',     label:'티켓',     categories:'PACKAGE_CATEGORIES',    items:'PACKAGE_ITEMS' },
+  { id:'bundle',     label:'중복메뉴', categories:'CUSTOM_CATEGORIES',     items:'CUSTOM_ITEMS' },
+  { id:'discount',   label:'할인설정', categories:'DISCOUNT_CATEGORIES',   items:'DISCOUNT_ITEMS' },
 ];
 
 function C_SettingsMenuPage() {
@@ -40,7 +41,6 @@ function C_SettingsMenuPage() {
           tab={tab} setTab={setTab}
           layout={layout} setLayout={setLayout}
           reorderMode={reorderMode} setReorderMode={setReorderMode}
-          onNewCategory={() => { setEditCategory(null); setShowCategoryModal(true); }}
           search={search} setSearch={setSearch}
         />
 
@@ -52,6 +52,7 @@ function C_SettingsMenuPage() {
               search={search}
               onEditCategory={(cat) => { setEditCategory(cat); setShowCategoryModal(true); }}
               onAddMenu={() => setShowMenuModal(true)}
+              onNewCategory={() => { setEditCategory(null); setShowCategoryModal(true); }}
               reorderMode={reorderMode}
             />
           )}
@@ -62,6 +63,7 @@ function C_SettingsMenuPage() {
                 search={search}
                 onAddMenu={() => setShowMenuModal(true)}
                 onEditCategory={(cat) => { setEditCategory(cat); setShowCategoryModal(true); }}
+                onNewCategory={() => { setEditCategory(null); setShowCategoryModal(true); }}
               />
             </div>
           )}
@@ -69,17 +71,17 @@ function C_SettingsMenuPage() {
       </div>
 
       {showCategoryModal && (
-        <C_CategoryModal cat={editCategory} palette={MENU_COLOR_PALETTE} onClose={() => setShowCategoryModal(false)}/>
+        <C_CategoryModal cat={editCategory} tabLabel={currentTab.label} palette={MENU_COLOR_PALETTE} onClose={() => setShowCategoryModal(false)}/>
       )}
       {showMenuModal && (
-        <C_MenuModal tab={tab} categories={categories} defaultCat={selectedCat} onClose={() => setShowMenuModal(false)}/>
+        <C_MenuModal tab={tab} tabLabel={currentTab.label} categories={categories} defaultCat={selectedCat} onClose={() => setShowMenuModal(false)}/>
       )}
     </div>
   );
 }
 
 // ─ 서브헤더 (탭 + 컨트롤) ─
-function C_SettingsMenuSubHeader({ tab, setTab, layout, setLayout, reorderMode, setReorderMode, onNewCategory, search, setSearch }) {
+function C_SettingsMenuSubHeader({ tab, setTab, layout, setLayout, reorderMode, setReorderMode, search, setSearch }) {
   return (
     <>
       {/* 상단 라인: 브레드크럼 + 검색 + 컨트롤 */}
@@ -135,17 +137,6 @@ function C_SettingsMenuSubHeader({ tab, setTab, layout, setLayout, reorderMode, 
         }}>
           <IconGrid size={12}/> 순서 변경
         </button>
-
-        {/* 카테고리 등록 */}
-        <button onClick={onNewCategory} style={{
-          display:'flex', alignItems:'center', gap:6,
-          padding:'7px 12px', background: C_BLUE, color:'#fff',
-          border:'none', borderRadius:7, fontSize:12, fontWeight:600,
-          cursor:'pointer', flexShrink:0, whiteSpace:'nowrap',
-          boxShadow:'0 1px 2px rgba(30,64,175,0.2)',
-        }}>
-          <IconPlus size={13}/> 카테고리 등록
-        </button>
       </div>
 
       {/* 두 번째 라인: 5개 탭 */}
@@ -175,7 +166,7 @@ function C_SettingsMenuSubHeader({ tab, setTab, layout, setLayout, reorderMode, 
 }
 
 // ─ 레이아웃 A: 좌 카테고리 리스트 / 우 아이템 상세 ─
-function C_MenuListDetail({ tab, categories, items: allItems, selectedCat, setSelectedCat, search, onEditCategory, onAddMenu, reorderMode }) {
+function C_MenuListDetail({ tab, categories, items: allItems, selectedCat, setSelectedCat, search, onEditCategory, onAddMenu, onNewCategory, reorderMode }) {
   const currentCat = categories.find(c => c.id === selectedCat) || categories[0];
   const items = (allItems[currentCat.id] || []).filter(it =>
     !search || it.name.toLowerCase().includes(search.toLowerCase())
@@ -194,7 +185,7 @@ function C_MenuListDetail({ tab, categories, items: allItems, selectedCat, setSe
         <div style={{padding:'14px 16px', borderBottom:`1px solid ${C_BORDER}`, display:'flex', justifyContent:'space-between', alignItems:'center'}}>
           <div>
             <div style={{fontSize:13, fontWeight:700, color:C_INK, letterSpacing:'-0.01em'}}>카테고리</div>
-            <div style={{fontSize:11, color:C_MUTED, marginTop:2}}>{activeCount}개 활성 · 전체 {MENU_CATEGORIES.length}개</div>
+            <div style={{fontSize:11, color:C_MUTED, marginTop:2}}>{activeCount}개 활성 · 전체 {categories.length}개</div>
           </div>
           {reorderMode && (
             <span style={{fontSize:10, color:C_BLUE, background:C_BLUE_SOFT, padding:'3px 8px', borderRadius:10, fontWeight:600}}>
@@ -253,6 +244,15 @@ function C_MenuListDetail({ tab, categories, items: allItems, selectedCat, setSe
             );
           })}
         </div>
+        <div style={{padding:'10px 12px', borderTop:`1px solid ${C_BORDER}`}}>
+          <button onClick={onNewCategory} style={{
+            width:'100%', height:34, display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+            border:`1px dashed ${C_BLUE}`, borderRadius:8, background:C_BLUE_SOFT, color:C_BLUE,
+            fontSize:12.5, fontWeight:700, cursor:'pointer', fontFamily:'inherit',
+          }}>
+            <IconPlus size={13}/> 카테고리 등록
+          </button>
+        </div>
       </div>
 
       {/* 우: 시술 상세 */}
@@ -302,8 +302,8 @@ function C_TabTable({ tab, items, currentCat, search, onAddMenu }) {
   const schema = TAB_SCHEMAS[tab];
   const gridCols = `44px 1fr ${schema.cols.map(c => c.w).join(' ')} 80px`;
   const addLabel = ({
-    service:'시술 메뉴', product:'제품', package:'패키지', custom:'커스텀 메뉴', discount:'할인 규정',
-  })[tab] + '를 추가해주세요';
+    service:'시술을', product:'제품을', membership:'정액권을', ticket:'티켓을', bundle:'중복 메뉴를', discount:'할인을',
+  })[tab] + ' 추가해주세요';
 
   return (
     <>
@@ -368,16 +368,24 @@ const TAB_SCHEMAS = {
       { key:'stock', label:'재고',   w:'70px',  type:'stock' },
     ],
   },
-  package: {
-    nameLabel: '패키지명',
+  membership: {
+    nameLabel: '정액권명',
+    cols: [
+      { key:'price',     label:'판매가',   w:'110px', type:'money' },
+      { key:'credit',    label:'적립',     w:'110px', type:'money' },
+      { key:'validDays', label:'유효기간', w:'80px',  type:'days' },
+    ],
+  },
+  ticket: {
+    nameLabel: '티켓명',
     cols: [
       { key:'price',     label:'가격',     w:'110px', type:'money' },
       { key:'sessions',  label:'회수',     w:'70px',  type:'sessions' },
       { key:'validDays', label:'유효기간', w:'80px',  type:'days' },
     ],
   },
-  custom: {
-    nameLabel: '조합 메뉴명',
+  bundle: {
+    nameLabel: '중복 메뉴명',
     cols: [
       { key:'combo',    label:'구성 시술', w:'220px', type:'combo', align:'left' },
       { key:'price',    label:'가격',      w:'100px', type:'money' },
@@ -527,18 +535,18 @@ function getGridRightValue(tab, it) {
   if (tab === 'discount') {
     return { text: it.type === 'percent' ? `${it.value}%` : `-${fmt(it.value)}원`, dim: false };
   }
-  if (tab === 'custom') {
-    return { text: it.duration ? `${it.duration}분` : '-', dim: !it.duration };
-  }
-  if (tab === 'package') {
+  if (tab === 'ticket') {
     return { text: `${it.sessions}회 · ${fmt(it.price)}`, dim: false };
+  }
+  if (tab === 'membership') {
+    return { text: `적립 ${fmt(it.credit)}`, dim: false };
   }
   // service, product
   return { text: it.price === 0 ? '0' : fmt(it.price), dim: !it.price };
 }
 
 // ─ 레이아웃 B: 그리드 (카테고리 카드 나열) ─
-function C_MenuGrid({ tab, categories, items: allItems, search, onAddMenu, onEditCategory }) {
+function C_MenuGrid({ tab, categories, items: allItems, search, onAddMenu, onEditCategory, onNewCategory }) {
   return (
     <div style={{display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:12}}>
       {categories.map(cat => {
@@ -608,6 +616,13 @@ function C_MenuGrid({ tab, categories, items: allItems, search, onAddMenu, onEdi
           </div>
         );
       })}
+      <button onClick={onNewCategory} style={{
+        minHeight:148, border:`1px dashed ${C_BLUE}`, borderRadius:10, background:C_BLUE_SOFT,
+        color:C_BLUE, fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:'inherit',
+        display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+      }}>
+        <IconPlus size={14}/> 카테고리 등록
+      </button>
     </div>
   );
 }
@@ -669,7 +684,7 @@ function C_MenuUnifiedTable({ search }) {
 }
 
 // ─ 카테고리 등록 모달 ─
-function C_CategoryModal({ cat, palette, onClose }) {
+function C_CategoryModal({ cat, tabLabel, palette, onClose }) {
   palette = palette || MENU_COLOR_PALETTE;
   const [name, setName] = React.useState(cat?.name || '');
   const [color, setColor] = React.useState(cat?.color || palette[0]);
@@ -688,7 +703,7 @@ function C_CategoryModal({ cat, palette, onClose }) {
       }}>
         <div style={{padding:'16px 20px 12px', borderBottom:`1px solid ${C_BORDER}`, display:'flex', alignItems:'center', justifyContent:'space-between'}}>
           <div style={{fontSize:15, fontWeight:700, color:C_INK, letterSpacing:'-0.01em'}}>
-            시술 카테고리 {cat ? '수정' : '등록'}
+            {tabLabel || '메뉴'} 카테고리 {cat ? '수정' : '등록'}
           </div>
           <button onClick={onClose} style={{background:'none', border:'none', color:C_MUTED, cursor:'pointer', display:'flex'}}>
             <IconX size={16}/>
@@ -792,7 +807,7 @@ function C_Toggle({ checked, onChange, colorOn }) {
 }
 
 // ─ 메뉴 등록 모달 ─
-function C_MenuModal({ tab, categories, defaultCat, onClose }) {
+function C_MenuModal({ tab, tabLabel, categories, defaultCat, onClose }) {
   categories = categories || MENU_CATEGORIES;
   const [category, setCategory] = React.useState(defaultCat);
   const [name, setName] = React.useState('');
@@ -811,7 +826,7 @@ function C_MenuModal({ tab, categories, defaultCat, onClose }) {
         overflow:'hidden',
       }}>
         <div style={{padding:'16px 20px 12px', borderBottom:`1px solid ${C_BORDER}`, display:'flex', alignItems:'center', justifyContent:'space-between'}}>
-          <div style={{fontSize:15, fontWeight:700, color:C_INK, letterSpacing:'-0.01em'}}>시술 메뉴 등록</div>
+          <div style={{fontSize:15, fontWeight:700, color:C_INK, letterSpacing:'-0.01em'}}>{tabLabel || '메뉴'} 등록</div>
           <button onClick={onClose} style={{background:'none', border:'none', color:C_MUTED, cursor:'pointer', display:'flex'}}>
             <IconX size={16}/>
           </button>

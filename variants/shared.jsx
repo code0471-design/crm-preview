@@ -582,6 +582,23 @@ const CUSTOM_ITEMS = {
   ],
 };
 
+// 정액권 (판매가와 적립)
+const MEMBERSHIP_CATEGORIES = [
+  { id:'standard', name:'기본 정액권', color:'#1E40AF', checkin:true, active:true },
+  { id:'promo',    name:'프로모션',    color:'#F59E0B', checkin:true, active:true },
+];
+const MEMBERSHIP_ITEMS = {
+  standard: [
+    { id:500, name:'A정액권', price:300000,  credit:360000,  validDays:365 },
+    { id:501, name:'B정액권', price:500000,  credit:600000,  validDays:365 },
+    { id:502, name:'C정액권', price:1000000, credit:1200000, validDays:365 },
+  ],
+  promo: [
+    { id:510, name:'오픈 기념 30만', price:300000, credit:400000, validDays:180 },
+    { id:511, name:'여름 50만',      price:500000, credit:650000, validDays:180 },
+  ],
+};
+
 // 할인 (정률/정액)
 const DISCOUNT_CATEGORIES = [
   { id:'percent',   name:'정률 할인',    color:'#3B82F6', checkin:false, active:true },
@@ -781,6 +798,7 @@ Object.assign(window, {
   PAY_METHODS, CLOSING_TODAY, CLOSING_INTERNAL, CLOSING_META,
   MENU_CATEGORIES, MENU_ITEMS, MENU_COLOR_PALETTE,
   PRODUCT_CATEGORIES, PRODUCT_ITEMS,
+  MEMBERSHIP_CATEGORIES, MEMBERSHIP_ITEMS,
   PACKAGE_CATEGORIES, PACKAGE_ITEMS,
   CUSTOM_CATEGORIES, CUSTOM_ITEMS,
   DISCOUNT_CATEGORIES, DISCOUNT_ITEMS,
