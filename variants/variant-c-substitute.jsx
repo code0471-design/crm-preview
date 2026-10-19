@@ -34,7 +34,9 @@ const SUB_SEED = [
 
 window.SUB_HANDOFF = {
   pct: '100',
-  settle: 'sale', // sale: 판매시 판매자 정산 / use: 소진시 시술자 정산
+  settle: 'sale',
+  focusFrom: null,
+  focusTo: null,
   rows: SUB_SEED.map(r => ({ ...r })),
   listeners: new Set(),
 };
@@ -56,17 +58,18 @@ function subWon(n) {
   return new Intl.NumberFormat('ko-KR').format(n || 0);
 }
 function subDiff(r) { return r.seller !== r.performer; }
-function subTarget(r, settle) { return settle === 'use' || subDiff(r); }
+function subTarget(r) { return subDiff(r); }
 function subRate(pct) {
   const n = Number(String(pct ?? '').replace(/[^0-9]/g, ''));
   if (!n) return 0;
   return Math.min(100, n);
 }
-function subGive(r, rate, settle) {
-  if (!subTarget(r, settle)) return 0;
-  if (settle === 'use') return r.amount;
-  if (r.done) return r.give;
-  return Math.round(r.amount * rate / 100);
+function subRowRate(r, fallback) {
+  return r.pct == null ? fallback : subRate(r.pct);
+}
+function subPreview(r, fallback) {
+  if (!subTarget(r)) return 0;
+  return Math.round(r.amount * subRowRate(r, fallback) / 100);
 }
 function subDay(iso) {
   const parts = String(iso || '').split('-');
@@ -77,20 +80,44 @@ function C_StaffSubPage() {
   const handoff = useSubHandoff();
   const pct = handoff.pct;
   const rows = handoff.rows;
-  const setPct = (v) => { handoff.pct = typeof v === 'function' ? v(handoff.pct) : v; subNotify(); };
   const setRows = (updater) => {
     handoff.rows = typeof updater === 'function' ? updater(handoff.rows) : updater;
     subNotify();
   };
+  const applyPct = (raw) => {
+    const text = String(raw ?? '').replace(/[^0-9]/g, '').slice(0, 3);
+    const next = subRate(text);
+    handoff.pct = text;
+    handoff.rows = handoff.rows.map(r => {
+      if (!subTarget(r)) return r;
+      const give = Math.round(r.amount * next / 100);
+      return { ...r, pct: next, give: r.done ? give : r.give };
+    });
+    subNotify();
+  };
+  const setRowPct = (id, raw) => {
+    const text = String(raw ?? '').replace(/[^0-9]/g, '').slice(0, 3);
+    const next = text === '' ? 0 : subRate(text);
+    setRows(list => list.map(r => r.id === id ? {
+      ...r,
+      pct: next,
+      give: r.done ? Math.round(r.amount * next / 100) : r.give,
+    } : r));
+  };
+  const startFrom = handoff.focusFrom || SUB_TODAY;
+  const startTo = handoff.focusTo || SUB_TODAY;
   const [filter, setFilter] = React.useState('all');
-  const [from, setFrom] = React.useState(SUB_TODAY);
-  const [to, setTo] = React.useState(SUB_TODAY);
-  const [applied, setApplied] = React.useState({ from: SUB_TODAY, to: SUB_TODAY });
+  const [from, setFrom] = React.useState(startFrom);
+  const [to, setTo] = React.useState(startTo);
+  const [applied, setApplied] = React.useState({ from: startFrom, to: startTo });
+  React.useEffect(() => {
+    handoff.focusFrom = null;
+    handoff.focusTo = null;
+  }, []);
   const [dateError, setDateError] = React.useState('');
   const [selected, setSelected] = React.useState(() => new Set());
   const rate = subRate(pct);
-  const settle = handoff.settle || 'sale';
-  const isTarget = (r) => subTarget(r, settle);
+  const isTarget = (r) => subTarget(r);
 
   const inRange = rows.filter(r => r.date >= applied.from && r.date <= applied.to);
   const shown = inRange.filter(r => {
@@ -108,7 +135,7 @@ function C_StaffSubPage() {
   const enterRows = (ids) => {
     const set = ids instanceof Set ? ids : new Set(ids);
     setRows(list => list.map(r => (set.has(r.id) && isTarget(r) && !r.done)
-      ? { ...r, done:true, give: settle === 'use' ? r.amount : Math.round(r.amount * rate / 100), pct: settle === 'use' ? 100 : rate }
+      ? { ...r, done:true, pct: subRowRate(r, rate), give: subPreview(r, rate) }
       : r));
     setSelected(new Set());
   };
@@ -152,7 +179,7 @@ function C_StaffSubPage() {
 
   const kpis = [
     { label:'정액권 · 티켓', value:`${inRange.length}건`, sub:'이 기간 시술', color:C_BLUE },
-    { label:'대체 대상 시술', value:`${diffN}건`, sub: settle === 'use' ? '정액권·티켓 전체' : '판매자 ≠ 시술자', color:'#C2410C' },
+    { label:'대체 대상 시술', value:`${diffN}건`, sub:'판매자 ≠ 시술자', color:'#C2410C' },
     { label:'대체 입력', value:`${doneN}건`, sub:`미입력 ${pendingN}건`, color:'#047857' },
     { label:'양도 합계', value:`${subWon(giveSum)}원`, sub:'입력된 금액', color:'#6D28D9' },
   ];
@@ -201,22 +228,19 @@ function C_StaffSubPage() {
             <div style={{flex:1, minWidth:0}}>
               <div style={{fontSize:13.5, fontWeight:700, color:C_INK}}>양도 비율 · 전체 설정</div>
               <div style={{fontSize:12.5, color:C_MUTED, marginTop:4, lineHeight:1.5}}>
-                {settle === 'use'
-                  ? '소진 정산은 소진액 전체가 시술자 매출이에요. 비율은 판매 정산일 때만 써요.'
-                  : '판매자와 시술자가 다를 때, 시술 금액의 이 비율을 판매자에게 넘겨요.'}
+                여기에 쓰면 아래 정산 건 오른쪽에 같은 비율이 들어가요. 건마다 다시 고칠 수 있어요.
               </div>
             </div>
             <div style={{display:'flex', alignItems:'center', gap:6, flexShrink:0}}>
               <input
                 value={pct}
-                disabled={settle === 'use'}
-                onChange={e => setPct(e.target.value.replace(/[^0-9]/g, '').slice(0, 3))}
-                onBlur={() => setPct(String(rate))}
+                onChange={e => applyPct(e.target.value)}
+                onBlur={() => applyPct(String(rate))}
                 style={{
                   width:64, height:36, padding:'0 10px', textAlign:'right',
                   border:`1px solid ${C_BORDER}`, borderRadius:8, fontSize:15, fontWeight:700,
                   color:C_INK, background:C_SURFACE, fontFamily:'inherit', outline:'none',
-                  fontVariantNumeric:'tabular-nums', opacity: settle === 'use' ? 0.4 : 1,
+                  fontVariantNumeric:'tabular-nums',
                 }}
               />
               <span style={{fontSize:14, fontWeight:700, color:C_INK}}>%</span>
@@ -266,7 +290,7 @@ function C_StaffSubPage() {
                 <col style={{width:84}}/>
                 <col style={{width:76}}/>
                 <col style={{width:76}}/>
-                <col style={{width:72}}/>
+                <col style={{width:108}}/>
                 <col style={{width:84}}/>
                 <col/>
               </colgroup>
@@ -278,7 +302,7 @@ function C_StaffSubPage() {
                   <th style={subThR}>사용금액</th>
                   <th style={subThL}>판매자</th>
                   <th style={subThL}>시술자</th>
-                  <th style={subThR}>양도</th>
+                  <th style={subThR}>양도 비율</th>
                   <th style={subThR}/>
                   <th style={subTh}/>
                 </tr>
@@ -289,7 +313,7 @@ function C_StaffSubPage() {
                 )}
                 {shown.map(r => {
                   const target = isTarget(r);
-                  const give = subGive(r, rate, settle);
+                  const give = target ? (r.done ? r.give : subPreview(r, rate)) : 0;
                   const bg = r.done ? '#F0FDF4' : target ? '#FFF8F1' : C_SURFACE;
                   const edge = target ? (r.done ? '#059669' : '#F59E0B') : 'transparent';
                   return (
@@ -313,10 +337,23 @@ function C_StaffSubPage() {
                       <td style={subTdL}><SubPerson name={r.performer} hot={target} tone="performer"/></td>
                       <td style={subTdR}>
                         {target ? (
-                          <>
+                          <div style={{display:'flex', flexDirection:'column', alignItems:'flex-end', gap:4}}>
+                            <span style={{display:'inline-flex', alignItems:'center', gap:4}}>
+                              <input
+                                value={r.pct == null ? pct : String(r.pct)}
+                                onChange={e => setRowPct(r.id, e.target.value)}
+                                onClick={e => e.stopPropagation()}
+                                style={{
+                                  width:46, height:26, padding:'0 6px', textAlign:'right',
+                                  border:`1px solid ${C_BORDER}`, borderRadius:6, fontSize:12.5, fontWeight:700,
+                                  color:C_INK, background:'#fff', fontFamily:'inherit', outline:'none',
+                                  fontVariantNumeric:'tabular-nums',
+                                }}
+                              />
+                              <span style={{fontSize:12, fontWeight:700, color:C_MUTED}}>%</span>
+                            </span>
                             <div style={{fontWeight:800, color: r.done ? '#047857' : '#C2410C', fontVariantNumeric:'tabular-nums'}}>{subWon(give)}</div>
-                            <div style={{fontSize:11, color:C_MUTED, marginTop:1}}>{settle === 'use' ? '소진액' : (r.done ? `${r.pct}%` : `${rate}%`)}</div>
-                          </>
+                          </div>
                         ) : (
                           <span style={{color:'#94A3B8'}}>—</span>
                         )}
@@ -347,31 +384,11 @@ function C_StaffSubPage() {
 }
 
 function C_SettlePicker() {
-  const handoff = useSubHandoff();
-  const mode = handoff.settle || 'sale';
-  const pick = (id) => { handoff.settle = id; subNotify(); };
-  const options = [
-    { id:'sale', title:'정액권 판매시 판매자에게 정산', desc:'소진 건은 일일마감에 0원. 판매자와 시술자가 다를 때만 대체해요.' },
-    { id:'use', title:'정액권 소진시 시술자에게 정산', desc:'정액권·티켓 시술 전체가 대체 대상. 소진액이 시술자 매출로 잡혀요.' },
-  ];
   return (
-    <div style={{background:C_SURFACE, border:`1px solid ${C_BORDER}`, borderRadius:12, padding:'14px 16px'}}>
-      <div style={{fontSize:13.5, fontWeight:800, color:C_INK, marginBottom:10}}>우리 매장 정산 방식</div>
-      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8}}>
-        {options.map(op => {
-          const on = mode === op.id;
-          return (
-            <button key={op.id} onClick={() => pick(op.id)} style={{
-              textAlign:'left', padding:'12px 14px', borderRadius:10, cursor:'pointer', fontFamily:'inherit',
-              border:`1.5px solid ${on ? C_BLUE : C_BORDER}`,
-              background: on ? C_BLUE_SOFT : C_SURFACE,
-              boxShadow: on ? '0 0 0 1px rgba(30,64,175,0.15)' : 'none',
-            }}>
-              <div style={{fontSize:13, fontWeight:800, color: on ? C_BLUE : C_INK, lineHeight:1.4}}>{op.title}</div>
-              <div style={{fontSize:12, color:C_MUTED, marginTop:4, lineHeight:1.45}}>{op.desc}</div>
-            </button>
-          );
-        })}
+    <div style={{background:'#F8FAFC', border:`1px solid ${C_BORDER}`, borderRadius:12, padding:'12px 16px'}}>
+      <div style={{fontSize:13, fontWeight:800, color:C_INK}}>정액권 매출 대체입력</div>
+      <div style={{fontSize:12.5, color:C_MUTED, marginTop:4, lineHeight:1.55}}>
+        정액권 판매 시 판매자에게 인센티브를 정산하는 매장만 필요해요. 판매자와 시술자가 다를 때, 시술 금액의 일부를 판매자에게 넘깁니다.
       </div>
     </div>
   );
