@@ -154,12 +154,10 @@ function closingSubPending(rows, iso) {
 
 // ─ 서브헤더 ─
 function C_ClosingSubHeader({ tab, setTab, layout, setLayout, day, setDay, subRows, onSub }) {
+  const [tipOn, setTipOn] = React.useState(false);
   const todayN = closingSubPending(subRows, CLOSING_APP_TODAY);
   const dayN = day === CLOSING_APP_TODAY ? 0 : closingSubPending(subRows, day);
   const n = todayN || dayN;
-  const tip = todayN && dayN
-    ? `오늘 대체입력 ${todayN}건 · 이 날짜 ${dayN}건`
-    : todayN ? `오늘 대체입력 ${todayN}건` : `이 날짜 대체입력 ${dayN}건`;
   return (
     <div style={{
       display:'flex', alignItems:'center', gap:8,
@@ -178,14 +176,36 @@ function C_ClosingSubHeader({ tab, setTab, layout, setLayout, day, setDay, subRo
         <button onClick={() => setDay(closingShift(day, 1))} style={c_iconBtnSm}><IconChevronR size={14}/></button>
         <button onClick={() => setDay(CLOSING_APP_TODAY)} style={{...c_ghostBtnSm, marginLeft:2}}>오늘</button>
         {n > 0 && (
-          <button onClick={() => onSub(todayN ? CLOSING_APP_TODAY : day)} title={tip} style={{
-            height:28, padding:'0 8px 0 7px', marginLeft:4, borderRadius:14, cursor:'pointer', fontFamily:'inherit',
-            border:'1px solid #FDBA74', background:'#FFF7ED', color:'#C2410C',
-            display:'inline-flex', alignItems:'center', gap:4, flexShrink:0,
-          }}>
-            <IconBell size={14} stroke={2}/>
-            <span style={{fontSize:12, fontWeight:800, fontVariantNumeric:'tabular-nums'}}>{n}</span>
-          </button>
+          <span
+            onMouseEnter={() => setTipOn(true)}
+            onMouseLeave={() => setTipOn(false)}
+            style={{position:'relative', display:'inline-flex', marginLeft:4}}
+          >
+            <button onClick={() => onSub(todayN ? CLOSING_APP_TODAY : day)} style={{
+              height:28, padding:'0 8px 0 7px', borderRadius:14, cursor:'pointer', fontFamily:'inherit',
+              border:'1px solid #FDBA74', background:'#FFF7ED', color:'#C2410C',
+              display:'inline-flex', alignItems:'center', gap:4, flexShrink:0,
+            }}>
+              <IconBell size={14} stroke={2}/>
+              <span style={{fontSize:12, fontWeight:800, fontVariantNumeric:'tabular-nums'}}>{n}</span>
+            </button>
+            {tipOn && (
+              <div style={{
+                position:'absolute', top:'calc(100% + 8px)', left:'50%', transform:'translateX(-50%)',
+                zIndex:40, width:228, padding:'8px 10px', borderRadius:8,
+                background:'#0B1425', color:'#fff', fontSize:12, fontWeight:600, lineHeight:1.5,
+                boxShadow:'0 8px 20px rgba(11,20,37,0.28)', textAlign:'left',
+              }}>
+                <span style={{
+                  position:'absolute', top:-4, left:'50%', width:8, height:8, marginLeft:-4,
+                  background:'#0B1425', transform:'rotate(45deg)',
+                }}/>
+                {todayN > 0 && <div>오늘 아직 대체입력할 시술이 {todayN}건 있어요.</div>}
+                {dayN > 0 && <div>{closingLabel(day)}에도 {dayN}건 있어요.</div>}
+                <div style={{marginTop:2, color:'#FDBA74', fontWeight:500}}>판매자와 시술자가 다른 정액권·티켓이에요. 누르면 대체현황으로 이동합니다.</div>
+              </div>
+            )}
+          </span>
         )}
       </div>
 
