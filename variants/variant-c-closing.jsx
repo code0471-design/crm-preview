@@ -100,6 +100,7 @@ function C_ClosingPage() {
           layout={layout} setLayout={setLayout}
           day={day} setDay={setDay}
           subRows={handoff ? handoff.rows : []}
+          settle={handoff ? handoff.settle : 'sale'}
           onSub={(iso) => {
             if (window.SUB_HANDOFF) {
               window.SUB_HANDOFF.focusFrom = iso;
@@ -118,6 +119,8 @@ function C_ClosingPage() {
               {tab === 'sales' ? '매출 마감' : tab === 'internal' ? '내수 마감' : '메타 매출'}
             </span>
           </div>
+
+          {window.C_SettlePicker && <div style={{marginBottom:14}}><window.C_SettlePicker/></div>}
 
           {/* KPI 스트립 */}
           <C_ClosingKPIs book={book} spot={spot} onHover={setHover} onToggle={toggleSpot}/>
@@ -148,15 +151,15 @@ function C_ClosingPage() {
   );
 }
 
-function closingSubPending(rows, iso) {
-  return (rows || []).filter(r => r.date === iso && r.seller !== r.performer && !r.done).length;
+function closingSubPending(rows, iso, settle) {
+  return (rows || []).filter(r => r.date === iso && !r.done && (settle === 'use' || r.seller !== r.performer)).length;
 }
 
 // ─ 서브헤더 ─
-function C_ClosingSubHeader({ tab, setTab, layout, setLayout, day, setDay, subRows, onSub }) {
+function C_ClosingSubHeader({ tab, setTab, layout, setLayout, day, setDay, subRows, onSub, settle }) {
   const [tipOn, setTipOn] = React.useState(false);
-  const todayN = closingSubPending(subRows, CLOSING_APP_TODAY);
-  const dayN = day === CLOSING_APP_TODAY ? 0 : closingSubPending(subRows, day);
+  const todayN = closingSubPending(subRows, CLOSING_APP_TODAY, settle);
+  const dayN = day === CLOSING_APP_TODAY ? 0 : closingSubPending(subRows, day, settle);
   const n = todayN || dayN;
   return (
     <div style={{
