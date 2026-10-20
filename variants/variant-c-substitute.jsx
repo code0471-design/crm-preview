@@ -198,7 +198,7 @@ function C_StaffSubPage() {
         </div>
 
         <div style={{flex:1, overflow:'auto', padding:'16px 20px 24px', display:'flex', flexDirection:'column', gap:12}}>
-          <C_SettlePicker/>
+          <C_SubIntro/>
 
           <div style={{background:C_SURFACE, border:`1px solid ${C_BORDER}`, borderRadius:12, padding:'12px 14px', display:'flex', alignItems:'center', gap:8, flexWrap:'wrap'}}>
             {[
@@ -386,6 +386,17 @@ function C_StaffSubPage() {
             </table>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function C_SubIntro() {
+  return (
+    <div style={{background:'#F8FAFC', border:`1px solid ${C_BORDER}`, borderRadius:12, padding:'12px 16px'}}>
+      <div style={{fontSize:13, fontWeight:800, color:C_INK}}>정액권 매출 대체입력</div>
+      <div style={{fontSize:12.5, color:C_MUTED, marginTop:4, lineHeight:1.55}}>
+        정액권 판매 시 판매자에게 인센티브를 정산하는 매장만 필요해요. 판매자와 시술자가 다를 때, 시술 금액의 일부를 판매자에게 넘깁니다.
       </div>
     </div>
   );
