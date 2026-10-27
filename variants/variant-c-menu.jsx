@@ -512,7 +512,10 @@ function C_MenuRow({ index, item, categoryColor, gridCols, schema }) {
     }}>
       <div style={{textAlign:'center', color:C_MUTED, fontWeight:600, fontVariantNumeric:'tabular-nums', fontSize:11}}>{index}</div>
       <div>
-        <div style={{fontSize:13, color:C_INK, fontWeight:500}}>{item.name}</div>
+        <div style={{fontSize:13, color:C_INK, fontWeight:500, display:'flex', alignItems:'center', gap:6}}>
+          <span>{item.name}</span>
+          {item.checkin && <span style={{fontSize:10, fontWeight:700, color:'#047857', background:'#D1FAE5', padding:'1px 6px', borderRadius:8, flexShrink:0}}>셀프체크인</span>}
+        </div>
         {item.desc && <div style={{fontSize:11, color:C_MUTED, marginTop:2}}>{item.desc}</div>}
         {item.note && !schema.cols.some(c => c.key === 'note') && <div style={{fontSize:11, color:C_MUTED, marginTop:2}}>{item.note}</div>}
       </div>
@@ -597,7 +600,10 @@ function C_MenuGrid({ tab, categories, items: allItems, search, onAddMenu, onEdi
                       fontSize:12,
                     }}>
                       <div style={{flex:1, minWidth:0}}>
-                        <div style={{color:C_INK, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{it.name}</div>
+                        <div style={{color:C_INK, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', display:'flex', alignItems:'center', gap:6}}>
+                          <span style={{overflow:'hidden', textOverflow:'ellipsis'}}>{it.name}</span>
+                          {it.checkin && <span style={{fontSize:10, fontWeight:700, color:'#047857', background:'#D1FAE5', padding:'1px 6px', borderRadius:8, flexShrink:0}}>체크인</span>}
+                        </div>
                       </div>
                       <div style={{color: rightText.dim ? '#CBD5E1' : C_INK, fontWeight:600, fontVariantNumeric:'tabular-nums', letterSpacing:'-0.01em', flexShrink:0}}>
                         {rightText.text}
@@ -884,11 +890,30 @@ function C_VoucherModal({ kind, onClose }) {
 function C_MenuModal({ tab, tabLabel, categories, defaultCat, onClose }) {
   if (tab === 'membership' || tab === 'ticket') return <C_VoucherModal kind={tab} onClose={onClose}/>;
   categories = categories || MENU_CATEGORIES;
+  const service = tab === 'service';
   const [category, setCategory] = React.useState(defaultCat);
   const [name, setName] = React.useState('');
   const [price, setPrice] = React.useState('');
   const [duration, setDuration] = React.useState('');
   const [desc, setDesc] = React.useState('');
+  const [checkin, setCheckin] = React.useState(false);
+  const [nameError, setNameError] = React.useState('');
+  const save = () => {
+    if (!service) { onClose(); return; }
+    const trimmed = name.trim();
+    if (!trimmed) { setNameError('메뉴명을 입력해 주세요.'); return; }
+    const list = MENU_ITEMS[category] || [];
+    MENU_ITEMS[category] = list;
+    list.push({
+      id: Date.now(),
+      name: trimmed,
+      price: Number(price) || 0,
+      duration: Number(duration) || 0,
+      desc,
+      checkin,
+    });
+    onClose();
+  };
 
   return (
     <div onClick={onClose} style={{
@@ -931,9 +956,12 @@ function C_MenuModal({ tab, tabLabel, categories, defaultCat, onClose }) {
           {/* 메뉴명 */}
           <div style={{display:'grid', gridTemplateColumns:'80px 1fr', alignItems:'center', gap:12}}>
             <label style={{fontSize:12, fontWeight:600, color:C_INK}}>메뉴명 <span style={{color:'#EF4444'}}>*</span></label>
-            <input value={name} onChange={e => setName(e.target.value)}
-              placeholder="메뉴 이름을 입력하세요"
-              style={c_modalInput}/>
+            <div>
+              <input value={name} onChange={e => { setName(e.target.value); setNameError(''); }}
+                placeholder="메뉴 이름을 입력하세요"
+                style={c_modalInput}/>
+              {nameError && <div style={{fontSize:11.5, color:'#DC2626', fontWeight:600, marginTop:4}}>{nameError}</div>}
+            </div>
           </div>
 
           {/* 가격 / 소요시간 */}
@@ -971,6 +999,26 @@ function C_MenuModal({ tab, tabLabel, categories, defaultCat, onClose }) {
                 resize:'vertical',
               }}/>
           </div>
+
+          {service && (
+            <button onClick={() => setCheckin(v => !v)} style={{
+              display:'flex', alignItems:'flex-start', gap:10, textAlign:'left',
+              border:`1px solid ${checkin ? '#6EE7B7' : C_BORDER}`,
+              background: checkin ? '#F0FDF4' : C_SURFACE,
+              borderRadius:8, padding:'10px 12px', cursor:'pointer', fontFamily:'inherit',
+            }}>
+              <span style={{
+                width:16, height:16, borderRadius:4, marginTop:1, flexShrink:0,
+                border:`1.5px solid ${checkin ? '#059669' : '#C3CCDA'}`,
+                background: checkin ? '#059669' : C_SURFACE,
+                display:'inline-flex', alignItems:'center', justifyContent:'center', color:'#fff',
+              }}>{checkin && <IconCheck size={11} stroke={3}/>}</span>
+              <span>
+                <span style={{display:'block', fontSize:12.5, fontWeight:700, color:C_INK}}>셀프체크인 노출</span>
+                <span style={{display:'block', fontSize:11.5, color:C_MUTED, marginTop:2, lineHeight:1.45}}>켜면 매장 패드 셀프체크인 메뉴에 이 시술이 나옵니다.</span>
+              </span>
+            </button>
+          )}
         </div>
 
         <div style={{
@@ -978,7 +1026,7 @@ function C_MenuModal({ tab, tabLabel, categories, defaultCat, onClose }) {
           display:'flex', gap:8, justifyContent:'flex-end',
         }}>
           <button onClick={onClose} style={{...c_ghostBtn, padding:'8px 14px'}}>취소</button>
-          <button onClick={onClose} style={{
+          <button onClick={save} style={{
             padding:'8px 16px', background:C_BLUE, color:'#fff',
             border:'none', borderRadius:7, fontSize:13, fontWeight:600, cursor:'pointer',
           }}>저장</button>

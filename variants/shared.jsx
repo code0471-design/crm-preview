@@ -489,6 +489,10 @@ const MENU_ITEMS = {
     { id:83, name:'헬핏 트리트먼트 마사지',       price:59000, duration:50,  desc:'' },
   ],
 };
+const CHECKIN_MENU_IDS = new Set([1, 2, 3, 7, 9, 30, 31, 32, 40, 41, 42, 50, 51, 52, 60, 61, 62, 80, 81]);
+Object.keys(MENU_ITEMS).forEach(key => {
+  MENU_ITEMS[key].forEach(it => { it.checkin = CHECKIN_MENU_IDS.has(it.id); });
+});
 
 // ==== 메뉴 관리 나머지 탭 데이터 ====
 
@@ -749,7 +753,7 @@ const PERMISSION_TREE = [
       { id:'set-ops',      label:'운영 관리' },
       { id:'set-sms',      label:'SMS 매니저 서비스' },
       { id:'set-payroll',  label:'실시간 급여정산' },
-      { id:'set-lumi',     label:'쌀롱 루미 설정' },
+      { id:'set-lumi',     label:'셀프체크인 설정' },
       { id:'set-terminal', label:'단말기 설정' },
       { id:'set-phone',    label:'수신전화 설정' },
       { id:'set-group',    label:'고객 그룹 설정' },
