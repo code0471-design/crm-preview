@@ -55,6 +55,10 @@ function C_CheckinPage() {
     delete CHECKIN_PHOTOS[id];
     setTick(n => n + 1);
   };
+  const stopMenu = (it) => {
+    it.checkin = false;
+    setTick(n => n + 1);
+  };
 
   return (
     <div style={{flex:1, display:'flex', flexDirection:'column', minWidth:0, overflow:'hidden', background:C_BG}}>
@@ -128,7 +132,7 @@ function C_CheckinPage() {
               <div style={{fontSize:12, color:C_MUTED, fontVariantNumeric:'tabular-nums'}}>{menuCount}개</div>
             </div>
             <div style={{fontSize:12.5, color:C_MUTED, marginBottom:12, lineHeight:1.5}}>
-              메뉴 설정의 시술 등록에서 셀프체크인 노출을 켠 메뉴만 모았습니다.
+              메뉴 설정에서 셀프체크인 노출을 켠 시술입니다. 노출중지를 누르면 패드에서 빠집니다.
             </div>
             {groups.length === 0 && (
               <div style={{padding:'28px 8px 32px', textAlign:'center', fontSize:13, color:C_MUTED}}>
@@ -154,6 +158,11 @@ function C_CheckinPage() {
                     <div style={{width:88, textAlign:'right', fontSize:13, fontWeight:700, color:C_INK, fontVariantNumeric:'tabular-nums', flexShrink:0}}>
                       {checkinWon(it.price)}원
                     </div>
+                    <button onClick={() => stopMenu(it)} style={{
+                      height:28, padding:'0 10px', flexShrink:0, cursor:'pointer', fontFamily:'inherit',
+                      border:'1px solid #FDBA74', borderRadius:7, background:'#FFF7ED', color:'#C2410C',
+                      fontSize:11.5, fontWeight:700,
+                    }}>노출중지</button>
                   </div>
                 ))}
               </div>
