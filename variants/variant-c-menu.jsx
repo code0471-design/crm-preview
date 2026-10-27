@@ -845,41 +845,18 @@ function C_VoucherModal({ kind, onClose }) {
           {field('가격', price, setPrice, '원')}
           {field('적립액', credit, setCredit, '원')}
           {field('사용기간', days, setDays, '일')}
-          <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:12}}>
-            <button onClick={() => setExpire(v => !v)} style={{
-              display:'flex', alignItems:'flex-start', gap:8, border:'none', background:'transparent',
-              padding:'2px 0 0', cursor:'pointer', fontFamily:'inherit', textAlign:'left', flex:'1 1 auto', minWidth:0,
-            }}>
-              <span style={{
-                width:16, height:16, borderRadius:4, flexShrink:0, marginTop:1,
-                border:`1.5px solid ${expire ? C_BLUE : '#CBD5E1'}`,
-                background: expire ? C_BLUE : C_SURFACE,
-                color:'#fff', display:'inline-flex', alignItems:'center', justifyContent:'center',
-              }}>{expire && <IconCheck size={11} stroke={3}/>}</span>
-              <span style={{fontSize:12.5, fontWeight:700, color:C_INK, lineHeight:1.4}}>일정 만료시 {ticket ? '티켓' : '정액권'} 소멸</span>
-            </button>
-            {!ticket && (
-              <div style={{flexShrink:0, display:'flex', flexDirection:'column', gap:8, paddingTop:1}}>
-                <div style={{fontSize:12, fontWeight:700, color:C_INK}}>정액권 차감 방식</div>
-                {[
-                  { id:'first', label:'적립금 선차감' },
-                  { id:'last', label:'적립금 후차감' },
-                ].map(opt => (
-                  <button key={opt.id} onClick={() => setDeduct(opt.id)} style={{
-                    display:'flex', alignItems:'center', gap:8, border:'none', background:'transparent',
-                    padding:0, cursor:'pointer', fontFamily:'inherit', textAlign:'left',
-                  }}>
-                    <span style={{
-                      width:16, height:16, borderRadius:'50%', boxSizing:'border-box', flexShrink:0,
-                      border: deduct === opt.id ? `5px solid ${C_BLUE}` : '1.5px solid #CBD5E1',
-                      background:C_SURFACE,
-                    }}/>
-                    <span style={{fontSize:12.5, fontWeight: deduct === opt.id ? 700 : 500, color: deduct === opt.id ? C_INK : C_MUTED}}>{opt.label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <button onClick={() => setExpire(v => !v)} style={{
+            display:'flex', alignItems:'center', gap:8, border:'none', background:'transparent',
+            padding:0, cursor:'pointer', fontFamily:'inherit', textAlign:'left',
+          }}>
+            <span style={{
+              width:16, height:16, borderRadius:4, flexShrink:0,
+              border:`1.5px solid ${expire ? C_BLUE : '#CBD5E1'}`,
+              background: expire ? C_BLUE : C_SURFACE,
+              color:'#fff', display:'inline-flex', alignItems:'center', justifyContent:'center',
+            }}>{expire && <IconCheck size={11} stroke={3}/>}</span>
+            <span style={{fontSize:12.5, fontWeight:700, color:C_INK}}>일정 만료시 {ticket ? '티켓' : '정액권'} 소멸</span>
+          </button>
           {expire && (
             <div style={{display:'flex', flexDirection:'column', gap:8, paddingLeft:24}}>
               {[
@@ -898,6 +875,29 @@ function C_VoucherModal({ kind, onClose }) {
                   <span style={{fontSize:12.5, fontWeight: expireMode === opt.id ? 700 : 500, color: expireMode === opt.id ? C_INK : C_MUTED}}>{opt.label}</span>
                 </button>
               ))}
+            </div>
+          )}
+          {!ticket && (
+            <div style={{display:'grid', gridTemplateColumns:'108px 1fr', alignItems:'center', gap:12}}>
+              <div style={{fontSize:12, fontWeight:700, color:C_INK, lineHeight:1.35}}>정액권 차감 방식</div>
+              <div style={{display:'flex', alignItems:'center', gap:14}}>
+                {[
+                  { id:'first', label:'적립금 선차감' },
+                  { id:'last', label:'적립금 후차감' },
+                ].map(opt => (
+                  <button key={opt.id} onClick={() => setDeduct(opt.id)} style={{
+                    display:'flex', alignItems:'center', gap:6, border:'none', background:'transparent',
+                    padding:0, cursor:'pointer', fontFamily:'inherit', textAlign:'left',
+                  }}>
+                    <span style={{
+                      width:16, height:16, borderRadius:'50%', boxSizing:'border-box', flexShrink:0,
+                      border: deduct === opt.id ? `5px solid ${C_BLUE}` : '1.5px solid #CBD5E1',
+                      background:C_SURFACE,
+                    }}/>
+                    <span style={{fontSize:12.5, fontWeight: deduct === opt.id ? 700 : 500, color: deduct === opt.id ? C_INK : C_MUTED, whiteSpace:'nowrap'}}>{opt.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
