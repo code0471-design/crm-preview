@@ -230,6 +230,22 @@ function C_SideBar({ page, onPage }) {
 
 // ============ 헤더 (한 줄) ============
 function C_TopHeader({ onOpenCustomerRegister, onOpenGuestSales, onOpenClosing } = {}) {
+  const [menu, setMenu] = React.useState(false);
+  const menuRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!menu) return;
+    const onDoc = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenu(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [menu]);
+  const openAccount = (tab) => {
+    setMenu(false);
+    window.ACCOUNT_TAB = tab;
+    if (window.__accountJump) window.__accountJump(tab);
+    if (window.__goPage) window.__goPage('account');
+  };
   return (
     <div style={{
       display:'flex', alignItems:'center', gap:12,
@@ -237,12 +253,39 @@ function C_TopHeader({ onOpenCustomerRegister, onOpenGuestSales, onOpenClosing }
       position:'relative', zIndex:320,
     }}>
       {/* 로고 + 상호 (한 줄) */}
-      <div style={{display:'flex', alignItems:'center', gap:10, flexShrink:0}}>
+      <div ref={menuRef} style={{position:'relative', display:'flex', alignItems:'center', gap:10, flexShrink:0}}>
         <C_Logo size={30}/>
-        <div style={{display:'flex', alignItems:'center', gap:6, whiteSpace:'nowrap'}}>
+        <button onClick={() => setMenu(v => !v)} style={{
+          display:'flex', alignItems:'center', gap:6, whiteSpace:'nowrap',
+          border:'none', background:'transparent', padding:0, cursor:'pointer', fontFamily:'inherit',
+        }}>
           <span style={{fontSize:15, fontWeight:700, color:C_INK, letterSpacing:'-0.01em'}}>카이키키 부평본점</span>
-          <IconChevronD size={12} style={{color:C_MUTED, cursor:'pointer'}}/>
-        </div>
+          {menu ? <IconChevronU size={12} style={{color:C_MUTED}}/> : <IconChevronD size={12} style={{color:C_MUTED}}/>}
+        </button>
+        {menu && (
+          <div style={{
+            position:'absolute', top:'calc(100% + 10px)', left:40, zIndex:30,
+            minWidth:168, padding:6, background:C_SURFACE, borderRadius:10,
+            border:`1px solid ${C_BORDER}`, boxShadow:'0 10px 28px rgba(11,20,37,0.12)',
+          }}>
+            {[
+              { id:'info', label:'계정 정보 보기' },
+              { id:'pay', label:'사용료 청구 내역' },
+            ].map(item => (
+              <button key={item.id} onClick={() => openAccount(item.id)} style={{
+                display:'block', width:'100%', textAlign:'left', border:'none', background:'transparent',
+                padding:'8px 10px', borderRadius:7, cursor:'pointer', fontFamily:'inherit',
+                fontSize:13, fontWeight:600, color:C_INK,
+              }}>{item.label}</button>
+            ))}
+            <div style={{height:1, background:C_BORDER, margin:'4px 6px'}}/>
+            <button onClick={() => { setMenu(false); if (window.__toast) window.__toast('미리보기라 로그아웃은 되지 않아요.'); }} style={{
+              display:'block', width:'100%', textAlign:'left', border:'none', background:'transparent',
+              padding:'8px 10px', borderRadius:7, cursor:'pointer', fontFamily:'inherit',
+              fontSize:13, fontWeight:700, color:'#DC2626',
+            }}>로그아웃</button>
+          </div>
+        )}
       </div>
 
       {/* 전체매장 체크 */}
@@ -2476,6 +2519,7 @@ function VariantC() {
           if (page === 'settings-phone' && PhoneCmp) return <PhoneCmp/>;
           if (page === 'settings-group' && window.C_CustomerGroupPage) return <window.C_CustomerGroupPage/>;
           if (page === 'settings-lumi' && window.C_CheckinPage) return <window.C_CheckinPage/>;
+          if (page === 'account' && window.C_AccountPage) return <window.C_AccountPage/>;
           if (STUB_PAGES[page] && StubPage) return <StubPage {...STUB_PAGES[page]}/>;
           return <C_BookingPage/>;
         })()}
