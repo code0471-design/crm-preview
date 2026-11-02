@@ -94,7 +94,6 @@ const STUB_PAGES = {
   'analytics-dashboard':  { crumbs:['홈','분석','분석 대시보드'],  title:'분석 대시보드',   desc:'매출·객수·시술별 깊은 통계와 리포트를 제공합니다.' },
   'analytics-customer':   { crumbs:['홈','분석','고객 분석'],      title:'고객 분석',       desc:'재방문율, 이탈률, 채널 성과 등 고객 행동 분석을 제공합니다.' },
   'settings-payroll':     { crumbs:['홈','설정','실시간 급여정산'], title:'실시간 급여정산', desc:'디자이너별 매출·수수료를 실시간으로 정산합니다.' },
-  'settings-terminal':    { crumbs:['홈','설정','단말기 설정'],    title:'단말기 설정',     desc:'카드/POS 단말기 연동을 설정합니다.' },
 };
 
 function C_SideBar({ page, onPage }) {
@@ -2520,6 +2519,7 @@ function VariantC() {
           if (page === 'settings-group' && window.C_CustomerGroupPage) return <window.C_CustomerGroupPage/>;
           if (page === 'settings-lumi' && window.C_CheckinPage) return <window.C_CheckinPage/>;
           if (page === 'account' && window.C_AccountPage) return <window.C_AccountPage/>;
+          if (page === 'settings-terminal' && window.C_TermSettingsPage) return <window.C_TermSettingsPage/>;
           if (STUB_PAGES[page] && StubPage) return <StubPage {...STUB_PAGES[page]}/>;
           return <C_BookingPage/>;
         })()}
