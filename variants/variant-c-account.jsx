@@ -11,12 +11,30 @@ const ACCOUNT_ADDRS = [
   '인천광역시 부평구 마장로 42',
 ];
 
+function accountBill(year, month, program, sms, terminal, alim, paid) {
+  const sum = program + sms + terminal + alim;
+  const collected = paid == null ? sum : paid;
+  return {
+    year,
+    period: `${year}.${String(month).padStart(2, '0')}`,
+    program, sms, terminal, alim, sum,
+    billed: sum,
+    paid: collected,
+    due: Math.max(0, sum - collected),
+  };
+}
 const ACCOUNT_BILLS = [
-  { date:'2026-09-01', name:'9월 매장 사용료', amount:49000, method:'카드', status:'결제완료' },
-  { date:'2026-08-01', name:'8월 매장 사용료', amount:49000, method:'카드', status:'결제완료' },
-  { date:'2026-07-01', name:'7월 매장 사용료', amount:49000, method:'카드', status:'결제완료' },
-  { date:'2026-06-01', name:'6월 매장 사용료', amount:49000, method:'카드', status:'결제완료' },
+  accountBill(2026, 9, 49000, 8200, 11000, 2400, 60000),
+  accountBill(2026, 8, 49000, 6400, 11000, 1800),
+  accountBill(2026, 7, 49000, 5100, 11000, 900),
+  accountBill(2026, 6, 49000, 7300, 11000, 1500),
+  accountBill(2026, 5, 49000, 4200, 11000, 600),
+  accountBill(2026, 4, 49000, 3800, 11000, 400),
+  accountBill(2025, 12, 49000, 9100, 11000, 2200),
+  accountBill(2025, 11, 49000, 6700, 11000, 1600),
+  accountBill(2025, 10, 49000, 5400, 11000, 800),
 ];
+const BILL_COLS = ['사용기간', '프로그램료', '문자 사용료', '단말기 임대', '알림톡', '합계', '청구 금액', '수납 금액', '미납 금액'];
 
 function accountWon(n) {
   return new Intl.NumberFormat('ko-KR').format(n || 0);
@@ -263,28 +281,68 @@ function C_AccountPlan() {
 }
 
 function C_AccountBills() {
+  const [year, setYear] = React.useState('2026');
+  const rows = ACCOUNT_BILLS.filter(b => String(b.year) === year);
+  const cols = '88px repeat(8, 1fr)';
+  const money = (n, due) => (
+    <span style={{fontVariantNumeric:'tabular-nums', fontWeight: due && n > 0 ? 800 : 600, color: due && n > 0 ? '#DC2626' : C_INK}}>
+      {accountWon(n)}
+    </span>
+  );
   return (
-    <div style={{background:C_SURFACE, border:`1px solid ${C_BORDER}`, borderRadius:12, overflow:'hidden'}}>
-      <div style={{padding:'14px 16px', fontSize:15, fontWeight:800, color:C_INK}}>사용료 청구 내역</div>
+    <div style={{display:'flex', flexDirection:'column', gap:12}}>
       <div style={{
-        display:'grid', gridTemplateColumns:'120px 1fr 120px 80px 90px',
-        padding:'8px 16px', background:'#FBFCFE', borderTop:`1px solid ${C_BORDER}`,
-        fontSize:11, fontWeight:700, color:C_MUTED,
+        background:C_BLUE_SOFT, border:'1px solid #C7D6F5', borderRadius:12, padding:'14px 16px',
       }}>
-        <div>청구일</div><div>항목</div><div style={{textAlign:'right'}}>금액</div><div style={{textAlign:'center'}}>수단</div><div style={{textAlign:'right'}}>상태</div>
-      </div>
-      {ACCOUNT_BILLS.map(b => (
-        <div key={b.date} style={{
-          display:'grid', gridTemplateColumns:'120px 1fr 120px 80px 90px',
-          padding:'12px 16px', alignItems:'center', borderTop:`1px solid ${C_BORDER}`, fontSize:13, color:C_INK,
-        }}>
-          <div style={{fontVariantNumeric:'tabular-nums'}}>{b.date}</div>
-          <div style={{fontWeight:600}}>{b.name}</div>
-          <div style={{textAlign:'right', fontWeight:700, fontVariantNumeric:'tabular-nums'}}>{accountWon(b.amount)}원</div>
-          <div style={{textAlign:'center', color:C_MUTED}}>{b.method}</div>
-          <div style={{textAlign:'right', color:'#047857', fontWeight:700}}>{b.status}</div>
+        <div style={{fontSize:13, fontWeight:800, color:C_INK, marginBottom:6}}>사용료 청구 안내사항</div>
+        <div style={{fontSize:12.5, color:C_INK, lineHeight:1.6}}>
+          <div>사용료는 결제 정보에서 지정한 날짜에 맞춰 정기적으로 출금됩니다.</div>
+          <div>미납 금액이 있을 경우, 등록된 자동 출금 계좌가 출금 가능한 상태인지와 잔액이 충분한지 확인해 주세요.</div>
         </div>
-      ))}
+      </div>
+
+      <div style={{display:'flex', alignItems:'center', gap:12}}>
+        <div style={{fontSize:13, fontWeight:800, color:C_INK}}>사용기간</div>
+        <select value={year} onChange={e => setYear(e.target.value)} style={{
+          height:36, padding:'0 12px', borderRadius:18, border:`1px solid ${C_BORDER}`,
+          background:C_SURFACE, color:C_INK, fontSize:13, fontWeight:700, fontFamily:'inherit', outline:'none',
+        }}>
+          {['2026', '2025', '2024'].map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+      </div>
+
+      <div style={{background:C_SURFACE, border:`1px solid ${C_BORDER}`, borderRadius:12, overflow:'hidden'}}>
+        <div style={{
+          display:'grid', gridTemplateColumns:cols, gap:6,
+          padding:'10px 12px', background:'#FBFCFE', borderBottom:`1px solid ${C_BORDER}`,
+          fontSize:11, fontWeight:700, color:C_MUTED,
+        }}>
+          {BILL_COLS.map((label, i) => (
+            <div key={label} style={{textAlign: i === 0 ? 'left' : 'right'}}>{label}</div>
+          ))}
+        </div>
+        {rows.length === 0 && (
+          <div style={{padding:'36px 12px', textAlign:'center', fontSize:13, color:C_MUTED}}>
+            이 기간에 청구 내역이 없어요.
+          </div>
+        )}
+        {rows.map(b => (
+          <div key={b.period} style={{
+            display:'grid', gridTemplateColumns:cols, gap:6,
+            padding:'12px', alignItems:'center', borderTop:`1px solid ${C_BORDER}`, fontSize:12.5,
+          }}>
+            <div style={{fontWeight:700, color:C_INK, fontVariantNumeric:'tabular-nums'}}>{b.period}</div>
+            <div style={{textAlign:'right'}}>{money(b.program)}</div>
+            <div style={{textAlign:'right'}}>{money(b.sms)}</div>
+            <div style={{textAlign:'right'}}>{money(b.terminal)}</div>
+            <div style={{textAlign:'right'}}>{money(b.alim)}</div>
+            <div style={{textAlign:'right'}}>{money(b.sum)}</div>
+            <div style={{textAlign:'right'}}>{money(b.billed)}</div>
+            <div style={{textAlign:'right'}}>{money(b.paid)}</div>
+            <div style={{textAlign:'right'}}>{money(b.due, true)}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
