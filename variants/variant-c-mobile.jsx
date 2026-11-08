@@ -161,17 +161,31 @@ function MSheet({ children, onClose }) {
   );
 }
 
+const M_BOARD_DAY = '2026-09-21';
+function mSchedOff(designerId, iso) {
+  if (iso === M_BOARD_DAY) return false;
+  return (window.SCHEDULE_EVENTS || []).some(e => e.type === 'dayoff' && e.designerId === designerId && e.date === iso);
+}
 function MBoard() {
   const designers = (window.DESIGNERS || []).filter(d => d.id !== 'unassigned');
-  const [desId, setDesId] = React.useState(designers[0] ? designers[0].id : 'moon');
-  const [items, setItems] = React.useState(() => (window.RESERVATIONS || []).map(r => ({ ...r })));
+  const [picked, setPicked] = React.useState(() => designers.map(d => d.id));
+  const [day, setDay] = React.useState(M_BOARD_DAY);
+  const [items, setItems] = React.useState(() => (window.RESERVATIONS || []).map(r => ({ ...r, date: r.date || M_BOARD_DAY })));
   const [sheet, setSheet] = React.useState(null);
   const [toast, setToast] = React.useState('');
-  const designer = designers.find(d => d.id === desId) || designers[0];
-  const mine = items.filter(r => r.designer === desId && r.status !== 'cancelled');
-  const dayoff = mine.find(r => r.type === 'block' && r.blockType === 'dayoff');
+  const selected = designers.filter(d => picked.includes(d.id));
+  const dayItems = items.filter(r => (r.date || M_BOARD_DAY) === day && r.status !== 'cancelled' && picked.includes(r.designer));
+  const isOff = (id) => mSchedOff(id, day) || dayItems.some(r => r.designer === id && r.type === 'block' && r.blockType === 'dayoff');
+  const offs = selected.filter(d => isOff(d.id));
+  const active = selected.filter(d => !isOff(d.id));
   const slots = [];
   for (let m = window.DAY_START; m < window.DAY_END; m += window.SLOT_MIN) slots.push(m);
+  const marked = {};
+  items.forEach(r => { if (!r.type && r.status !== 'cancelled') marked[r.date || M_BOARD_DAY] = true; });
+  const week = mWeekOf(day).map(d => ({ ...d, has: !!marked[d.iso] }));
+  const head = week[0].iso.slice(0, 7).replace('-', '.') + '.' + week[0].iso.slice(8) + ' – ' + week[6].iso.slice(5).replace('-', '.');
+  const holiday = (window.HOLIDAYS || {})[day];
+  const allOn = designers.length > 0 && designers.every(d => picked.includes(d.id));
 
   React.useEffect(() => {
     if (!toast) return;
@@ -179,37 +193,71 @@ function MBoard() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const at = (min) => mine.find(r => {
+  const cover = (id, min) => dayItems.find(r => {
+    if (r.designer !== id) return false;
     const s = window.timeToMin(r.start);
     return min >= s && min < s + r.duration;
   });
-    const clash = (start, duration, designerId) => items.some(r => {
-    if (r.designer !== designerId || r.status === 'cancelled') return false;
+  const clash = (start, duration, designerId) => items.some(r => {
+    if ((r.date || M_BOARD_DAY) !== day || r.designer !== designerId || r.status === 'cancelled') return false;
     const a = window.timeToMin(start);
     const b = window.timeToMin(r.start);
     return a < b + r.duration && b < a + duration;
   });
 
-  const openEmpty = (min) => {
-    if (dayoff) return;
-    setSheet({ mode:'pick', start: window.minToTime(min), designer: desId });
+  const openEmpty = (min, free) => {
+    if (!free.length) return;
+    setSheet({ mode:'pick', start: window.minToTime(min), designer: free[0].id, free: free.map(d => d.id) });
+  };
+  const toggleDes = (id) => {
+    setPicked(prev => {
+      const on = prev.includes(id);
+      if (!on) return prev.concat(id);
+      const next = prev.filter(x => x !== id);
+      return next.length ? next : prev;
+    });
   };
 
   return (
     <div style={{display:'flex', flexDirection:'column', minHeight:0, flex:1}}>
       <div style={{padding:'12px 16px 8px', background:'#fff'}}>
-        <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between'}}>
-          <div style={{fontSize:18, fontWeight:800, letterSpacing:'-0.03em'}}>예약현황</div>
-          <div style={{fontSize:12, color:C_MUTED, fontWeight:700}}>2026.09.21</div>
+        <div style={{fontSize:18, fontWeight:800, letterSpacing:'-0.03em'}}>예약현황</div>
+        <div style={{fontSize:12, color:C_MUTED, marginTop:2}}>날짜를 고르고, 담당자는 여러 명 겹쳐 볼 수 있어요.</div>
+      </div>
+      <div style={{background:'#fff', padding:'0 12px 8px'}}>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4}}>
+          <button onClick={() => setDay(mAddDays(day, -7))} style={mNav}>‹</button>
+          <div style={{fontSize:13, fontWeight:800}}>{head}</div>
+          <button onClick={() => setDay(mAddDays(day, 7))} style={mNav}>›</button>
         </div>
-        <div style={{fontSize:12, color:C_MUTED, marginTop:2}}>빈 시간을 누르면 예약 등록 또는 예약불가를 넣을 수 있어요.</div>
+        <div style={{display:'grid', gridTemplateColumns:'repeat(7, 1fr)', textAlign:'center'}}>
+          {M_WD.map((w, i) => (
+            <div key={w} style={{fontSize:11, fontWeight:700, color: i === 0 ? '#EF4444' : i === 6 ? C_BLUE : C_MUTED, padding:'2px 0 4px'}}>{w}</div>
+          ))}
+          {week.map(d => {
+            const on = d.iso === day;
+            return (
+              <button key={d.iso} onClick={() => setDay(d.iso)} style={{
+                border:'none', background: on ? C_BLUE : 'transparent',
+                color: on ? '#fff' : d.sun ? '#EF4444' : d.sat ? C_BLUE : C_INK,
+                borderRadius:10, padding:'6px 0 3px', cursor:'pointer', fontFamily:'inherit',
+              }}>
+                <div style={{fontSize:14, fontWeight:800}}>{d.date}</div>
+                <div style={{height:8, display:'flex', justifyContent:'center', alignItems:'center'}}>
+                  {d.has && <span style={{width:4, height:4, borderRadius:'50%', background: on ? '#fff' : C_BLUE}}/>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
       <div style={{display:'flex', gap:6, overflowX:'auto', padding:'8px 16px 10px', background:'#fff', borderBottom:`1px solid ${C_BORDER}`}}>
+        <button onClick={() => setPicked(designers.map(d => d.id))} style={mChip(allOn)}>전체</button>
         {designers.map(d => {
-          const on = d.id === desId;
-          const n = items.filter(r => r.designer === d.id && !r.type && r.status !== 'cancelled').length;
+          const on = picked.includes(d.id);
+          const n = items.filter(r => (r.date || M_BOARD_DAY) === day && r.designer === d.id && !r.type && r.status !== 'cancelled').length;
           return (
-            <button key={d.id} onClick={() => setDesId(d.id)} style={{
+            <button key={d.id} onClick={() => toggleDes(d.id)} style={{
               flexShrink:0, border: on ? `1px solid ${C_BLUE}` : `1px solid ${C_BORDER}`,
               background: on ? C_BLUE_SOFT : '#fff', color: on ? C_BLUE : C_INK,
               borderRadius:16, padding:'6px 10px', fontSize:12, fontWeight:700, fontFamily:'inherit', cursor:'pointer',
@@ -222,66 +270,87 @@ function MBoard() {
         })}
       </div>
       <div style={{flex:1, overflow:'auto', padding:'8px 12px 16px'}}>
-        {dayoff ? (
-          <div style={{
-            margin:8, padding:'28px 16px', borderRadius:14, textAlign:'center',
+        {holiday && <div style={{margin:'4px 6px 8px', fontSize:12, fontWeight:800, color:'#B45309'}}>{holiday}</div>}
+        {offs.map(d => (
+          <div key={d.id} style={{
+            margin:'0 0 8px', padding:'12px 14px', borderRadius:12, fontWeight:800, fontSize:13,
             background:'repeating-linear-gradient(-45deg, #E2E8F0 0, #E2E8F0 8px, #F1F5F9 8px, #F1F5F9 16px)',
-            color:'#334155', fontWeight:800,
-          }}>휴무 · {dayoff.reason || dayoff.label}</div>
-        ) : slots.map(min => {
-          const hit = at(min);
-          const startMin = hit ? window.timeToMin(hit.start) : min;
-          if (hit && startMin !== min) return null;
-          const h = hit ? Math.max(52, hit.duration / 30 * 52) : 52;
-          if (!hit) {
-            return (
-              <button key={min} onClick={() => openEmpty(min)} style={{
-                width:'100%', display:'flex', gap:10, alignItems:'center',
-                border:'none', borderBottom:`1px solid ${C_BORDER}`, background:'transparent',
-                padding:'0 6px', height:h, cursor:'pointer', fontFamily:'inherit', textAlign:'left',
-              }}>
-                <div style={{width:46, fontSize:12, fontWeight:700, color:C_MUTED, fontVariantNumeric:'tabular-nums'}}>{window.minToTime(min)}</div>
-                <div style={{flex:1, fontSize:12.5, color:'#94A3B8'}}>비어 있음</div>
-                <div style={{fontSize:18, color:C_BLUE, fontWeight:500}}>+</div>
-              </button>
-            );
-          }
-          if (hit.type === 'block') {
-            return (
-              <div key={hit.id} style={{
-                display:'flex', gap:10, alignItems:'center', minHeight:h,
-                borderBottom:`1px solid ${C_BORDER}`, padding:'8px 6px',
-                background:'repeating-linear-gradient(-45deg, #FFF1F2 0, #FFF1F2 6px, #FFE4E6 6px, #FFE4E6 12px)',
-              }}>
-                <div style={{width:46, fontSize:12, fontWeight:800, color:'#BE123C', fontVariantNumeric:'tabular-nums'}}>{hit.start}</div>
-                <div style={{flex:1, minWidth:0}}>
-                  <div style={{fontSize:12.5, fontWeight:800, color:'#9F1239'}}>예약불가</div>
-                  <div style={{fontSize:12, color:'#BE123C', marginTop:1}}>{hit.reason || hit.label} · {hit.duration}분</div>
-                </div>
-                {String(hit.id).indexOf('m') === 0 && (
-                  <button onClick={() => setItems(list => list.filter(x => x.id !== hit.id))} style={{
-                    border:'none', background:'#fff', color:'#9F1239', borderRadius:8, padding:'6px 8px', fontSize:11, fontWeight:800, cursor:'pointer',
-                  }}>해제</button>
-                )}
-              </div>
-            );
-          }
-          const st = (window.C_STATUS && window.C_STATUS[hit.status]) || { label: hit.status, bg: C_BLUE, text:'#fff' };
+            color:'#334155',
+          }}>{d.name} · 휴무</div>
+        ))}
+        {active.length === 0 && offs.length === 0 && (
+          <div style={{padding:'28px 8px', textAlign:'center', color:C_MUTED, fontSize:13}}>담당자를 선택해 주세요.</div>
+        )}
+        {active.length > 1 && (
+          <button onClick={() => setSheet({
+            mode:'pick', start:'10:00', designer: active[0].id,
+            free: active.map(d => d.id), pickTime: true,
+          })} style={{...mPrimary, width:'100%', margin:'0 0 8px'}}>예약 등록</button>
+        )}
+        {active.length > 0 && slots.map(min => {
+          const starting = [];
+          const free = [];
+          active.forEach(d => {
+            const hit = cover(d.id, min);
+            if (!hit) free.push(d);
+            else if (window.timeToMin(hit.start) === min) starting.push({ d, hit });
+          });
+          if (!starting.length && active.length > 1) return null;
+          if (!starting.length && !free.length) return null;
+          const freeLabel = free.length <= 2 ? free.map(d => d.name).join(', ') : free[0].name + ' 외 ' + (free.length - 1) + '명';
           return (
-            <div key={hit.id} style={{
-              display:'flex', gap:10, alignItems:'center', minHeight:h,
-              borderBottom:`1px solid ${C_BORDER}`, padding:'8px 6px',
-            }}>
-              <div style={{width:46, fontSize:12, fontWeight:800, color:C_INK, fontVariantNumeric:'tabular-nums'}}>{hit.start}</div>
-              <div style={{width:3, alignSelf:'stretch', borderRadius:2, background: designer ? designer.color : C_BLUE}}/>
-              <div style={{flex:1, minWidth:0}}>
-                <div style={{fontSize:14, fontWeight:800, letterSpacing:'-0.02em'}}>{hit.customer}</div>
-                <div style={{fontSize:12, color:C_MUTED, marginTop:1}}>{hit.menu} · {hit.duration}분</div>
-              </div>
-              <span style={{
-                fontSize:10.5, fontWeight:800, color: st.text, background: st.bg,
-                borderRadius:8, padding:'3px 6px',
-              }}>{st.label}</span>
+            <div key={min}>
+              {starting.map(({ d, hit }) => {
+                if (hit.type === 'block') {
+                  return (
+                    <div key={hit.id} style={{
+                      display:'flex', gap:10, alignItems:'center', minHeight:52,
+                      borderBottom:`1px solid ${C_BORDER}`, padding:'8px 6px',
+                      background:'repeating-linear-gradient(-45deg, #FFF1F2 0, #FFF1F2 6px, #FFE4E6 6px, #FFE4E6 12px)',
+                    }}>
+                      <div style={{width:46, fontSize:12, fontWeight:800, color:'#BE123C', fontVariantNumeric:'tabular-nums'}}>{hit.start}</div>
+                      <div style={{flex:1, minWidth:0}}>
+                        <div style={{fontSize:12.5, fontWeight:800, color:'#9F1239'}}>{selected.length > 1 ? d.name + ' · ' : ''}예약불가</div>
+                        <div style={{fontSize:12, color:'#BE123C', marginTop:1}}>{hit.reason || hit.label} · {hit.duration}분</div>
+                      </div>
+                      {String(hit.id).indexOf('m') === 0 && (
+                        <button onClick={() => setItems(list => list.filter(x => x.id !== hit.id))} style={{
+                          border:'none', background:'#fff', color:'#9F1239', borderRadius:8, padding:'6px 8px', fontSize:11, fontWeight:800, cursor:'pointer',
+                        }}>해제</button>
+                      )}
+                    </div>
+                  );
+                }
+                const st = (window.C_STATUS && window.C_STATUS[hit.status]) || { label: hit.status, bg: C_BLUE, text:'#fff' };
+                return (
+                  <div key={hit.id} style={{
+                    display:'flex', gap:10, alignItems:'center', minHeight:52,
+                    borderBottom:`1px solid ${C_BORDER}`, padding:'8px 6px',
+                  }}>
+                    <div style={{width:46, fontSize:12, fontWeight:800, color:C_INK, fontVariantNumeric:'tabular-nums'}}>{hit.start}</div>
+                    <div style={{width:3, alignSelf:'stretch', borderRadius:2, background:d.color}}/>
+                    <div style={{flex:1, minWidth:0}}>
+                      <div style={{fontSize:14, fontWeight:800, letterSpacing:'-0.02em'}}>{hit.customer}</div>
+                      <div style={{fontSize:12, color:C_MUTED, marginTop:1}}>{selected.length > 1 ? d.name + ' · ' : ''}{hit.menu} · {hit.duration}분</div>
+                    </div>
+                    <span style={{
+                      fontSize:10.5, fontWeight:800, color: st.text, background: st.bg,
+                      borderRadius:8, padding:'3px 6px',
+                    }}>{st.label}</span>
+                  </div>
+                );
+              })}
+              {free.length > 0 && active.length === 1 && (
+                <button onClick={() => openEmpty(min, free)} style={{
+                  width:'100%', display:'flex', gap:10, alignItems:'center',
+                  border:'none', borderBottom:`1px solid ${C_BORDER}`, background:'transparent',
+                  padding:'0 6px', height:44, cursor:'pointer', fontFamily:'inherit', textAlign:'left',
+                }}>
+                  <div style={{width:46, fontSize:12, fontWeight:700, color:C_MUTED, fontVariantNumeric:'tabular-nums'}}>{starting.length ? '' : window.minToTime(min)}</div>
+                  <div style={{flex:1, fontSize:12.5, color:'#94A3B8'}}>비어 있음{selected.length > 1 ? ' · ' + freeLabel : ''}</div>
+                  <div style={{fontSize:18, color:C_BLUE, fontWeight:500}}>+</div>
+                </button>
+              )}
             </div>
           );
         })}
@@ -295,7 +364,22 @@ function MBoard() {
       )}
       {sheet && sheet.mode === 'pick' && (
         <MSheet onClose={() => setSheet(null)}>
-          <div style={{fontSize:16, fontWeight:800}}>{sheet.start} · {designer && designer.name}</div>
+          <div style={{fontSize:16, fontWeight:800}}>{sheet.start} · {(designers.find(d => d.id === sheet.designer) || {}).name}</div>
+          {sheet.pickTime && (
+            <div style={{display:'flex', gap:6, overflowX:'auto', marginTop:12}}>
+              {slots.map(min => {
+                const t = window.minToTime(min);
+                return <button key={t} onClick={() => setSheet({ ...sheet, start: t })} style={mChip(sheet.start === t)}>{t}</button>;
+              })}
+            </div>
+          )}
+          {sheet.free && sheet.free.length > 1 && (
+            <div style={{display:'flex', gap:6, overflowX:'auto', marginTop:12}}>
+              {designers.filter(d => sheet.free.includes(d.id)).map(d => (
+                <button key={d.id} onClick={() => setSheet({ ...sheet, designer: d.id })} style={mChip(sheet.designer === d.id)}>{d.name}</button>
+              ))}
+            </div>
+          )}
           <div style={{display:'flex', flexDirection:'column', gap:8, marginTop:14}}>
             <button onClick={() => setSheet({ ...sheet, mode:'book', menu: M_MENUS[0], customer: null, q:'' })} style={mPrimary}>새 예약 등록</button>
             <button onClick={() => setSheet({ ...sheet, mode:'block', reason: M_REASONS[0], duration: 60 })} style={mGhost}>예약불가</button>
@@ -305,13 +389,13 @@ function MBoard() {
       {sheet && sheet.mode === 'book' && (
         <MBookSheet
           sheet={sheet}
-          designers={designers}
+          designers={sheet.free ? designers.filter(d => sheet.free.includes(d.id)) : designers}
           onChange={setSheet}
           onClose={() => setSheet(null)}
           onSave={(row) => {
             if (clash(row.start, row.duration, row.designer)) { setToast('그 시간에는 이미 일정이 있어요.'); return; }
-            setItems(list => [...list, row]);
-            setDesId(row.designer);
+            setItems(list => [...list, { ...row, date: day }]);
+            setPicked(prev => prev.includes(row.designer) ? prev : prev.concat(row.designer));
             setSheet(null);
             setToast(`${row.customer} 예약이 등록됐어요.`);
           }}
@@ -320,7 +404,14 @@ function MBoard() {
       {sheet && sheet.mode === 'block' && (
         <MSheet onClose={() => setSheet(null)}>
           <div style={{fontSize:16, fontWeight:800}}>예약불가</div>
-          <div style={{fontSize:12.5, color:C_MUTED, margin:'4px 0 12px'}}>{sheet.start} · {designer && designer.name}</div>
+          <div style={{fontSize:12.5, color:C_MUTED, margin:'4px 0 12px'}}>{sheet.start} · {(designers.find(d => d.id === sheet.designer) || {}).name}</div>
+          {sheet.free && sheet.free.length > 1 && (
+            <div style={{display:'flex', gap:6, overflowX:'auto', marginBottom:12}}>
+              {designers.filter(d => sheet.free.includes(d.id)).map(d => (
+                <button key={d.id} onClick={() => setSheet({ ...sheet, designer: d.id })} style={mChip(sheet.designer === d.id)}>{d.name}</button>
+              ))}
+            </div>
+          )}
           <div style={{display:'flex', flexWrap:'wrap', gap:6}}>
             {M_REASONS.map(reason => (
               <button key={reason} onClick={() => setSheet({ ...sheet, reason })} style={mChip(sheet.reason === reason)}>{reason}</button>
@@ -333,10 +424,10 @@ function MBoard() {
           </div>
           <button onClick={() => {
             const duration = sheet.duration || 60;
-            if (clash(sheet.start, duration, desId)) { setToast('그 시간에는 이미 일정이 있어요.'); return; }
+            if (clash(sheet.start, duration, sheet.designer)) { setToast('그 시간에는 이미 일정이 있어요.'); return; }
             setItems(list => [...list, {
               id:'m' + Date.now(), type:'block', blockType:'unavailable',
-              designer: desId, start: sheet.start, duration,
+              designer: sheet.designer, date: day, start: sheet.start, duration,
               label:'예약불가', reason: sheet.reason,
             }]);
             setSheet(null);
@@ -752,6 +843,8 @@ function MAnalysis({ basis, setBasis }) {
         </div>
       </div>
 
+      <MHold range={range}/>
+
       <MCard title={topPay ? `${mRo(topPay.name)} 가장 많이 팔렸어요` : '결제수단'}>
         {pays.map(p => (
           <div key={p.id} style={{marginBottom:10}}>
@@ -824,6 +917,62 @@ function MAnalysis({ basis, setBasis }) {
       </MCard>
       <div style={{height:12}}/>
     </div>
+  );
+}
+
+const M_PP_NAME = { a:'A정액권', b:'B정액권', c:'C정액권', t1:'클리닉 5회', t2:'케어 10회' };
+function MHold({ range }) {
+  const [tab, setTab] = React.useState('membership');
+  const from = range && range.from ? range.from.replace(/\./g, '-') : '';
+  const to = range && range.to ? range.to.replace(/\./g, '-') : '';
+  const rows = (window.PP_HOLD || []).filter(r => r.kind === tab && (!from || (r.bought >= from && r.bought <= to)));
+  const sales = rows.reduce((a, r) => a + r.sales, 0);
+  const used = rows.reduce((a, r) => a + r.used, 0);
+  const credit = rows.reduce((a, r) => a + (r.credit != null ? r.credit : r.sales), 0);
+  const buyers = new Set(rows.map(r => r.name)).size;
+  const list = rows.slice().sort((a, b) => (b.sales - b.used) - (a.sales - a.used));
+  const tiles = [
+    { name:'판매', amount: sales },
+    { name:'소진', amount: used },
+    { name:'금액 잔액', amount: sales - used },
+    { name:'적립 잔액', amount: credit - used },
+  ];
+  return (
+    <MCard title="정액권 잔액" sub="구매일이 이 기간인 고객입니다. 금액 잔액은 판매−소진, 적립 잔액은 적립−소진입니다.">
+      <div style={{display:'flex', gap:6, marginBottom:10}}>
+        <button onClick={() => setTab('membership')} style={mChip(tab === 'membership')}>정액권</button>
+        <button onClick={() => setTab('ticket')} style={mChip(tab === 'ticket')}>티켓</button>
+      </div>
+      <div style={{fontSize:12, color:C_MUTED, fontWeight:700}}>{buyers}명 · {rows.length}건</div>
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginTop:8}}>
+        {tiles.map(t => (
+          <div key={t.name} style={{background:'#F8FAFC', borderRadius:10, padding:'10px 12px'}}>
+            <div style={{fontSize:11, color:C_MUTED, fontWeight:700}}>{t.name}</div>
+            <div style={{fontSize:15, fontWeight:800, marginTop:2}}>{mWon(t.amount)}원</div>
+          </div>
+        ))}
+      </div>
+      <div style={{marginTop:12}}>
+        {list.length === 0 && <div style={{padding:'12px 0', color:C_MUTED, fontSize:13}}>이 기간에 구매한 고객이 없어요.</div>}
+        {list.map(r => {
+          const des = (window.ST_DES || window.DESIGNERS || []).find(d => d.id === r.designer);
+          return (
+            <div key={r.name + r.product + r.bought} style={{padding:'10px 0', borderTop:`1px solid ${C_BORDER}`}}>
+              <div style={{display:'flex', justifyContent:'space-between', gap:8}}>
+                <div style={{fontSize:14, fontWeight:800}}>{r.name}</div>
+                <div style={{fontSize:13, fontWeight:800}}>{mWon(r.sales - r.used)}원</div>
+              </div>
+              <div style={{fontSize:12, color:C_MUTED, marginTop:2}}>
+                {M_PP_NAME[r.product] || r.product} · {des ? des.name : ''} · {r.bought.slice(5).replace('-', '.')}
+              </div>
+              <div style={{fontSize:12, color:C_MUTED, marginTop:2}}>
+                판매 {mWon(r.sales)} · 적립 {mWon(r.credit != null ? r.credit : r.sales)} · 소진 {mWon(r.used)} · 적립 잔액 {mWon((r.credit != null ? r.credit : r.sales) - r.used)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </MCard>
   );
 }
 
