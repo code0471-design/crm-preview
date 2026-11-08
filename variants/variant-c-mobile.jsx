@@ -40,6 +40,108 @@ function mHour(r) {
 function mPayOf(r) {
   return Object.values(r.pay || {}).reduce((a, b) => a + b, 0);
 }
+function mUseOf(r, key) {
+  return (r.use && r.use[key]) || 0;
+}
+function mAmt(r, basis) {
+  return basis === 'use' ? (r.service || 0) : mPayOf(r);
+}
+function mIso(dt) {
+  return dt.getFullYear() + '-' + mPad(dt.getMonth() + 1) + '-' + mPad(dt.getDate());
+}
+function mParse(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+function mAddDays(iso, n) {
+  const dt = mParse(iso);
+  dt.setDate(dt.getDate() + n);
+  return mIso(dt);
+}
+function mWeekOf(iso) {
+  const start = mParse(iso);
+  start.setDate(start.getDate() - start.getDay());
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const dt = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    days.push({ iso: mIso(dt), date: dt.getDate(), sun: i === 0, sat: i === 6 });
+  }
+  return days;
+}
+function mBucket(rows, basis) {
+  const sale = basis !== 'use';
+  const out = {
+    total: 0, n: 0,
+    fresh: 0, freshN: 0, back: 0, backN: 0,
+    pay: { card:0, cash:0, bank:0, naver:0, gift:0 },
+    use: { membership:0, ticket:0, deposit:0, point:0 },
+    kind: { service:0, product:0, membership:0, ticket:0, deposit:0 },
+  };
+  rows.forEach(r => {
+    const paid = mPayOf(r);
+    const svc = r.service || 0;
+    const cnt = r.n || 1;
+    const take = (amt) => {
+      out.total += amt;
+      out.n += cnt;
+      if (r.visit === 'new') { out.fresh += amt; out.freshN += cnt; }
+      else { out.back += amt; out.backN += cnt; }
+    };
+    if (sale) {
+      take(paid);
+      Object.entries(r.pay || {}).forEach(([k, v]) => { out.pay[k] = (out.pay[k] || 0) + v; });
+      if (out.kind[r.kind] != null) out.kind[r.kind] += paid;
+      return;
+    }
+    if (svc <= 0) return;
+    take(svc);
+    if (r.kind === 'service' || r.kind === 'product') {
+      Object.entries(r.pay || {}).forEach(([k, v]) => { out.pay[k] = (out.pay[k] || 0) + v; });
+      out.kind[r.kind] += svc;
+    }
+    ['membership', 'ticket', 'deposit', 'point'].forEach(k => { out.use[k] += mUseOf(r, k); });
+  });
+  return out;
+}
+
+function MBasis({ basis, setBasis }) {
+  const opts = [
+    { id:'sale', label:'정액권 매출시 정산' },
+    { id:'use', label:'정액권 소진시 정산' },
+  ];
+  return (
+    <div style={{padding:'0 16px 10px'}}>
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:6}}>
+        {opts.map(o => (
+          <button key={o.id} onClick={() => setBasis(o.id)} style={{
+            ...mChip(basis === o.id), borderRadius:12, padding:'10px 8px', lineHeight:1.35, whiteSpace:'normal',
+          }}>{o.label}</button>
+        ))}
+      </div>
+      <div style={{fontSize:11.5, color:C_MUTED, marginTop:8, lineHeight:1.45}}>
+        {basis === 'use'
+          ? '시술·제품 금액입니다. 정액권·티켓 판매는 빠지고, 소진한 금액이 포함됩니다.'
+          : '고객이 낸 돈입니다. 정액권·티켓을 판 금액은 포함되고, 소진은 빠집니다.'}
+      </div>
+    </div>
+  );
+}
+function MBits({ label, items }) {
+  return (
+    <div style={{marginTop:8}}>
+      <div style={{fontSize:11, color:C_MUTED, fontWeight:700, marginBottom:4}}>{label}</div>
+      <div style={{display:'flex', flexWrap:'wrap', gap:6}}>
+        {items.map(x => (
+          <span key={x.name} style={{background:'#F8FAFC', borderRadius:8, padding:'5px 8px', fontSize:12, lineHeight:1.3}}>
+            <span style={{color:C_MUTED}}>{x.name} </span>
+            <b>{mWon(x.amount)}</b>
+            {x.extra ? <span style={{color:C_MUTED}}> {x.extra}</span> : ''}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function MSheet({ children, onClose }) {
   return (
@@ -303,9 +405,14 @@ function MBookSheet({ sheet, designers, onChange, onClose, onSave }) {
 
 function MLedger() {
   const rows = (window.LEDGER_ROWS || []).slice().sort((a, b) => (a.date + a.time < b.date + b.time ? 1 : -1));
+  const dates = {};
+  rows.forEach(r => { dates[r.date] = true; });
+  const [day, setDay] = React.useState(rows[0] ? rows[0].date : '2026-09-21');
   const [kind, setKind] = React.useState('all');
-  const shown = rows.filter(r => kind === 'all' || r.kind === kind);
+  const week = mWeekOf(day).map(d => ({ ...d, has: !!dates[d.iso] }));
+  const shown = rows.filter(r => r.date === day && (kind === 'all' || r.kind === kind));
   const sum = shown.reduce((a, r) => a + r.amount, 0);
+  const dt = mParse(day);
   const kinds = [
     { id:'all', label:'전체' },
     { id:'service', label:'시술' },
@@ -314,22 +421,51 @@ function MLedger() {
     { id:'product', label:'제품' },
   ];
   const payName = { card:'카드', cash:'현금', naver:'네이버', mix:'현금+카드' };
+  const head = week[0].iso.slice(0, 7).replace('-', '.') + '.' + week[0].iso.slice(8) + ' – ' + week[6].iso.slice(5).replace('-', '.');
   return (
     <div style={{flex:1, overflow:'auto', background:C_BG}}>
       <div style={{padding:'14px 16px 8px'}}>
         <div style={{fontSize:18, fontWeight:800, letterSpacing:'-0.03em'}}>매출내역</div>
-        <div style={{fontSize:12, color:C_MUTED, marginTop:2}}>2026.09 · PC 매출내역과 같은 결제 건</div>
+        <div style={{fontSize:12, color:C_MUTED, marginTop:2}}>날짜를 고르면 그날 결제만 보여요.</div>
       </div>
-      <div style={{display:'flex', gap:6, overflowX:'auto', padding:'4px 16px 10px'}}>
+      <div style={{margin:'0 16px 10px', background:'#fff', borderRadius:14, padding:'10px 8px 8px'}}>
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6}}>
+          <button onClick={() => setDay(mAddDays(day, -7))} style={mNav}>‹</button>
+          <div style={{fontSize:13, fontWeight:800}}>{head}</div>
+          <button onClick={() => setDay(mAddDays(day, 7))} style={mNav}>›</button>
+        </div>
+        <div style={{display:'grid', gridTemplateColumns:'repeat(7, 1fr)', textAlign:'center'}}>
+          {M_WD.map((w, i) => (
+            <div key={w} style={{fontSize:11, fontWeight:700, color: i === 0 ? '#EF4444' : i === 6 ? C_BLUE : C_MUTED, padding:'2px 0 4px'}}>{w}</div>
+          ))}
+          {week.map(d => {
+            const on = d.iso === day;
+            return (
+              <button key={d.iso} onClick={() => setDay(d.iso)} style={{
+                border:'none', background: on ? C_BLUE : 'transparent',
+                color: on ? '#fff' : d.sun ? '#EF4444' : d.sat ? C_BLUE : C_INK,
+                borderRadius:10, padding:'6px 0 3px', cursor:'pointer', fontFamily:'inherit',
+              }}>
+                <div style={{fontSize:14, fontWeight:800}}>{d.date}</div>
+                <div style={{height:8, display:'flex', justifyContent:'center', alignItems:'center'}}>
+                  {d.has && <span style={{width:4, height:4, borderRadius:'50%', background: on ? '#fff' : C_BLUE}}/>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div style={{display:'flex', gap:6, overflowX:'auto', padding:'0 16px 10px'}}>
         {kinds.map(k => (
           <button key={k.id} onClick={() => setKind(k.id)} style={mChip(kind === k.id)}>{k.label}</button>
         ))}
       </div>
       <div style={{margin:'0 16px 12px', background:'#fff', borderRadius:14, padding:'14px 16px'}}>
-        <div style={{fontSize:12, color:C_MUTED, fontWeight:700}}>{shown.length}건</div>
+        <div style={{fontSize:12, color:C_MUTED, fontWeight:700}}>{dt.getMonth() + 1}월 {dt.getDate()}일 {M_WD[dt.getDay()]}요일 · {shown.length}건</div>
         <div style={{fontSize:26, fontWeight:800, letterSpacing:'-0.04em', marginTop:2}}>{mWon(sum)}원</div>
       </div>
       <div style={{margin:'0 16px 20px', background:'#fff', borderRadius:14, overflow:'hidden'}}>
+        {shown.length === 0 && <div style={{padding:'22px 14px', textAlign:'center', color:C_MUTED, fontSize:13}}>이 날짜의 매출이 없어요.</div>}
         {shown.map((r, i) => (
           <div key={r.date + r.time + r.customer + r.menu} style={{
             padding:'12px 14px', borderTop: i ? `1px solid ${C_BORDER}` : 'none',
@@ -339,7 +475,7 @@ function MLedger() {
               <div style={{fontSize:14, fontWeight:800, fontVariantNumeric:'tabular-nums'}}>{mWon(r.amount)}원</div>
             </div>
             <div style={{fontSize:12, color:C_MUTED, marginTop:3}}>
-              {r.date.slice(5).replace('-', '.')} {r.time} · {r.menu}
+              {r.time} · {r.menu}
             </div>
             <div style={{fontSize:12, color:C_MUTED, marginTop:2}}>
               {r.designer} · {payName[r.pay] || r.pay}
@@ -352,51 +488,89 @@ function MLedger() {
   );
 }
 
-function MSales() {
+function mBreak(box, basis) {
+  const pays = M_PAY.map(p => ({ name: p.name, amount: box.pay[p.id] || 0 })).filter(p => p.amount > 0);
+  if (basis === 'use') {
+    [
+      { name:'정액권 사용', amount: box.use.membership },
+      { name:'티켓 사용', amount: box.use.ticket },
+      { name:'포인트', amount: box.use.point },
+      { name:'예약금 사용', amount: box.use.deposit },
+    ].forEach(x => { if (x.amount > 0) pays.push(x); });
+  }
+  const kinds = basis === 'use'
+    ? [
+        { name:'시술', amount: box.kind.service },
+        { name:'제품', amount: box.kind.product },
+      ]
+    : [
+        { name:'시술', amount: box.kind.service },
+        { name:'제품', amount: box.kind.product },
+        { name:'정액권', amount: box.kind.membership },
+        { name:'티켓', amount: box.kind.ticket },
+      ];
+  if (basis !== 'use' && box.kind.deposit > 0) kinds.push({ name:'예약금', amount: box.kind.deposit });
+  const burns = basis === 'use' ? [
+    { name:'정액권 소진', amount: box.use.membership },
+    { name:'티켓 소진', amount: box.use.ticket },
+  ] : [];
+  return { pays, kinds, burns };
+}
+function MSales({ basis, setBasis }) {
   const all = window.ST_ROWS || [];
   const [mode, setMode] = React.useState('day');
-  const days = [];
-  for (let d = 1; d <= 17; d++) {
-    const rows = all.filter(r => r.m === 10 && r.day === d);
-    if (!rows.length) continue;
-    const pay = rows.reduce((s, r) => s + mPayOf(r), 0);
-    const n = rows.reduce((s, r) => s + (r.n || 1), 0);
-    days.push({ day:d, pay, n });
-  }
-  const months = [9, 10].map(m => {
-    const rows = all.filter(r => r.m === m);
-    return { m, pay: rows.reduce((s, r) => s + mPayOf(r), 0), n: rows.reduce((s, r) => s + (r.n || 1), 0) };
-  });
-  const max = Math.max(1, ...(mode === 'day' ? days.map(d => d.pay) : months.map(d => d.pay)));
-  const list = mode === 'day' ? days.slice().reverse() : months.slice().reverse();
-  const total = list.reduce((s, r) => s + r.pay, 0);
+  const groups = mode === 'day'
+    ? [17, 16, 15, 14, 13, 12, 9, 6, 3].map(day => ({
+        key: 'd' + day,
+        title: '10월 ' + day + '일',
+        rows: all.filter(r => r.m === 10 && r.day === day),
+      })).filter(g => g.rows.length)
+    : [10, 9].map(m => ({
+        key: 'm' + m,
+        title: '2026년 ' + m + '월',
+        rows: all.filter(r => r.m === m),
+      }));
+  const periodRows = mode === 'day' ? all.filter(r => r.m === 10) : all.filter(r => r.m === 9 || r.m === 10);
+  const head = mBucket(periodRows, basis);
+  const max = Math.max(1, ...groups.map(g => mBucket(g.rows, basis).total));
   return (
     <div style={{flex:1, overflow:'auto', background:C_BG}}>
       <div style={{padding:'14px 16px 8px'}}>
         <div style={{fontSize:18, fontWeight:800, letterSpacing:'-0.03em'}}>일별 / 월별 매출</div>
-        <div style={{fontSize:12, color:C_MUTED, marginTop:2}}>결산과 같은 결제 금액</div>
+        <div style={{fontSize:12, color:C_MUTED, marginTop:2}}>결산과 같은 정산 기준</div>
       </div>
-      <div style={{display:'flex', gap:6, padding:'4px 16px 12px'}}>
+      <MBasis basis={basis} setBasis={setBasis}/>
+      <div style={{display:'flex', gap:6, padding:'0 16px 12px'}}>
         <button onClick={() => setMode('day')} style={mChip(mode === 'day')}>일별 · 10월</button>
         <button onClick={() => setMode('month')} style={mChip(mode === 'month')}>월별</button>
       </div>
       <div style={{margin:'0 16px 12px', background:'#fff', borderRadius:14, padding:'14px 16px'}}>
-        <div style={{fontSize:12, color:C_MUTED, fontWeight:700}}>{mode === 'day' ? '10월 1일–17일' : '9월–10월'}</div>
-        <div style={{fontSize:26, fontWeight:800, letterSpacing:'-0.04em', marginTop:2}}>{mWon(total)}원</div>
+        <div style={{fontSize:12, color:C_MUTED, fontWeight:700}}>{mode === 'day' ? '10월 1일–17일' : '9월–10월'} · {head.n}건</div>
+        <div style={{fontSize:26, fontWeight:800, letterSpacing:'-0.04em', marginTop:2}}>{mWon(head.total)}원</div>
       </div>
-      <div style={{margin:'0 16px 20px', background:'#fff', borderRadius:14, overflow:'hidden'}}>
-        {list.map((row, i) => (
-          <div key={mode + (row.day || row.m)} style={{padding:'12px 14px', borderTop: i ? `1px solid ${C_BORDER}` : 'none'}}>
-            <div style={{display:'flex', justifyContent:'space-between', marginBottom:6}}>
-              <div style={{fontSize:14, fontWeight:800}}>{mode === 'day' ? `10월 ${row.day}일` : `2026년 ${row.m}월`}</div>
-              <div style={{fontSize:14, fontWeight:800}}>{mWon(row.pay)}원</div>
+      <div style={{margin:'0 16px 20px', display:'flex', flexDirection:'column', gap:8}}>
+        {groups.map(g => {
+          const box = mBucket(g.rows, basis);
+          const br = mBreak(box, basis);
+          return (
+            <div key={g.key} style={{background:'#fff', borderRadius:14, padding:'12px 14px'}}>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:8}}>
+                <div style={{fontSize:14, fontWeight:800}}>{g.title}</div>
+                <div style={{fontSize:14, fontWeight:800}}>{mWon(box.total)}원</div>
+              </div>
+              <div style={{height:6, borderRadius:4, background:'#EEF2FF', marginTop:8}}>
+                <div style={{width:`${Math.max(box.total ? 4 : 0, box.total / max * 100)}%`, height:'100%', borderRadius:4, background:C_BLUE}}/>
+              </div>
+              <MBits label="고객 유형" items={[
+                { name:'신규', amount: box.fresh, extra: box.freshN + '건' },
+                { name:'기존', amount: box.back, extra: box.backN + '건' },
+              ]}/>
+              <MBits label={basis === 'use' ? '결제 · 소진' : '결제수단'} items={br.pays.length ? br.pays : [{ name:'없음', amount:0 }]}/>
+              <MBits label={basis === 'use' ? '시술 · 제품' : '시술 · 제품 · 정액권 · 티켓'} items={br.kinds}/>
+              {br.burns.length > 0 && <MBits label="포함된 소진" items={br.burns}/>}
             </div>
-            <div style={{height:8, borderRadius:4, background:'#EEF2FF'}}>
-              <div style={{width:`${Math.max(4, row.pay / max * 100)}%`, height:'100%', borderRadius:4, background:C_BLUE}}/>
-            </div>
-            <div style={{fontSize:11.5, color:C_MUTED, marginTop:4}}>{row.n}건</div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -462,68 +636,68 @@ function MSub() {
   );
 }
 
-function MAnalysis() {
+function MAnalysis({ basis, setBasis }) {
   const presets = (window.ST_PRESETS || []).filter(p => p.id === 'today' || p.id === 'month' || p.id === 'last');
   const [preset, setPreset] = React.useState('month');
   const [open, setOpen] = React.useState(false);
   const range = presets.find(p => p.id === preset) || presets[0];
   const rows = window.stRowsFor ? window.stRowsFor(preset) : [];
-  const pack = window.stCollect ? window.stCollect(rows) : { all:{ pay:0, sale:{ membership:0, ticket:0 }, payMethods:{} }, byDes:{} };
-  const b = pack.all;
-  const payOfKind = (kind) => rows.filter(r => r.kind === kind).reduce((s, r) => s + mPayOf(r), 0);
+  const counted = rows.filter(r => basis !== 'use' || (r.service || 0) > 0);
+  const box = mBucket(rows, basis);
+  const br = mBreak(box, basis);
   const year = [];
   for (let m = 1; m <= 12; m++) {
     const list = (window.ST_ROWS || []).filter(r => r.m === m);
-    year.push(list.reduce((s, r) => s + mPayOf(r), 0));
+    year.push(list.reduce((s, r) => s + mAmt(r, basis), 0));
   }
-  const pays = M_PAY.map(p => ({ ...p, amount: (b.payMethods && b.payMethods[p.id]) || 0 })).filter(p => p.amount > 0).sort((a, c) => c.amount - a.amount);
+  const pays = br.pays.map((p, i) => ({ ...p, id: p.name + i, color: (M_PAY.find(x => x.name === p.name) || { color:'#818CF8' }).color }));
   const payMax = pays.reduce((m, p) => Math.max(m, p.amount), 1);
-  const topPay = pays[0];
-  const designers = (window.ST_DES || []).map(d => {
-    const box = pack.byDes[d.id] || { pay:0, lines:0 };
-    return { ...d, pay: box.pay, n: box.lines };
-  }).filter(d => d.pay > 0).sort((a, c) => c.pay - a.pay);
+  const topPay = pays.slice().sort((a, c) => c.amount - a.amount)[0];
+  const byDes = {};
+  counted.forEach(r => {
+    if (!byDes[r.designer]) byDes[r.designer] = { pay:0, n:0 };
+    byDes[r.designer].pay += mAmt(r, basis);
+    byDes[r.designer].n += r.n || 1;
+  });
+  const designers = (window.ST_DES || []).map(d => ({ ...d, pay: (byDes[d.id] || {}).pay || 0, n: (byDes[d.id] || {}).n || 0 })).filter(d => d.pay > 0).sort((a, c) => c.pay - a.pay);
   const desMax = designers.reduce((m, d) => Math.max(m, d.pay), 1);
   const hours = M_HOURS.map(h => ({ h, n:0, pay:0 }));
-  rows.forEach(r => {
+  counted.forEach(r => {
     const slot = hours.find(x => x.h === mHour(r));
     if (!slot) return;
     slot.n += r.n || 1;
-    slot.pay += mPayOf(r);
+    slot.pay += mAmt(r, basis);
   });
   const hourMax = hours.reduce((m, h) => Math.max(m, h.pay), 1);
   const topHour = hours.slice().sort((a, c) => c.pay - a.pay)[0];
   const weeks = M_WD.map((name, i) => ({ name, i, n:0, pay:0 }));
-  rows.forEach(r => {
+  counted.forEach(r => {
     const i = new Date(2026, r.m - 1, r.day).getDay();
     weeks[i].n += r.n || 1;
-    weeks[i].pay += mPayOf(r);
+    weeks[i].pay += mAmt(r, basis);
   });
   const weekMax = weeks.reduce((m, w) => Math.max(m, w.pay), 1);
   const topWeek = weeks.slice().sort((a, c) => c.pay - a.pay)[0];
   const menus = Object.keys(M_CAT).map(id => {
-    const list = rows.filter(r => r.cat === id);
+    const list = counted.filter(r => r.cat === id);
     return {
       id, name: M_CAT[id],
       n: list.reduce((s, r) => s + (r.n || 1), 0),
-      amount: list.reduce((s, r) => s + (r.service || 0), 0),
+      amount: list.reduce((s, r) => s + mAmt(r, basis), 0),
     };
-  }).filter(m => m.n > 0).sort((a, c) => c.amount - a.amount);
+  }).filter(m => m.amount > 0).sort((a, c) => c.amount - a.amount);
   const menuSum = menus.reduce((s, m) => s + m.amount, 0);
   const menuN = menus.reduce((s, m) => s + m.n, 0);
-  const dots = [
-    { name:'시술', amount: payOfKind('service'), color:'#4F46E5' },
-    { name:'정액권', amount: payOfKind('membership'), color:'#818CF8' },
-    { name:'티켓', amount: payOfKind('ticket'), color:'#F59E0B' },
-    { name:'제품', amount: payOfKind('product'), color:'#94A3B8' },
-    { name:'예약금', amount: payOfKind('deposit'), color:'#CBD5E1' },
-  ].filter(d => d.amount > 0);
+  const dotColor = { '시술':'#4F46E5', '제품':'#94A3B8', '정액권':'#818CF8', '티켓':'#F59E0B', '예약금':'#CBD5E1' };
+  const dots = br.kinds.filter(d => d.amount > 0).map(d => ({ ...d, color: dotColor[d.name] || '#94A3B8' }));
+  const burns = br.burns.map(d => ({ ...d, color: d.name.indexOf('티켓') === 0 ? '#F59E0B' : '#818CF8' }));
 
   return (
     <div style={{flex:1, overflow:'auto', background:'#F8FAFC'}}>
-      <div style={{padding:'14px 16px 12px', display:'flex', alignItems:'center', gap:8}}>
+      <div style={{padding:'14px 16px 8px', display:'flex', alignItems:'center', gap:8}}>
         <div style={{fontSize:20, fontWeight:800, letterSpacing:'-0.04em', flex:1}}>매출 분석</div>
       </div>
+      <MBasis basis={basis} setBasis={setBasis}/>
       <div style={{padding:'0 16px 10px', position:'relative'}}>
         <button onClick={() => setOpen(v => !v)} style={{
           width:'100%', display:'flex', justifyContent:'space-between', alignItems:'center',
@@ -551,7 +725,7 @@ function MAnalysis() {
 
       <div style={{margin:'0 16px 12px', background:'#fff', borderRadius:16, padding:'16px'}}>
         <div style={{fontSize:13, color:C_MUTED, fontWeight:700}}>총 매출</div>
-        <div style={{fontSize:30, fontWeight:800, letterSpacing:'-0.04em', margin:'4px 0 12px'}}>{mWon(b.pay)}원</div>
+        <div style={{fontSize:30, fontWeight:800, letterSpacing:'-0.04em', margin:'4px 0 12px'}}>{mWon(box.total)}원</div>
         {dots.map(d => (
           <div key={d.name} style={{display:'flex', alignItems:'center', gap:8, padding:'4px 0', fontSize:13}}>
             <span style={{width:8, height:8, borderRadius:'50%', background:d.color}}/>
@@ -559,6 +733,18 @@ function MAnalysis() {
             <span style={{fontWeight:800}}>{mWon(d.amount)}원</span>
           </div>
         ))}
+        {burns.length > 0 && (
+          <div style={{marginTop:8, paddingTop:8, borderTop:`1px solid ${C_BORDER}`}}>
+            <div style={{fontSize:11, color:C_MUTED, fontWeight:700, marginBottom:4}}>시술 금액에 포함된 소진</div>
+            {burns.map(d => (
+              <div key={d.name} style={{display:'flex', alignItems:'center', gap:8, padding:'4px 0', fontSize:13}}>
+                <span style={{width:8, height:8, borderRadius:'50%', background:d.color}}/>
+                <span style={{flex:1, color:'#334155'}}>{d.name}</span>
+                <span style={{fontWeight:800}}>{mWon(d.amount)}원</span>
+              </div>
+            ))}
+          </div>
+        )}
         <div style={{fontSize:12, color:C_MUTED, fontWeight:700, margin:'14px 0 6px'}}>12개월 추이</div>
         <MLine values={year}/>
         <div style={{display:'flex', justifyContent:'space-between', fontSize:10, color:'#94A3B8', marginTop:2}}>
@@ -681,6 +867,10 @@ const mInput = {
   width:'100%', height:42, border:`1px solid ${C_BORDER}`, borderRadius:10,
   padding:'0 12px', fontSize:14, fontFamily:'inherit', outline:'none',
 };
+const mNav = {
+  width:32, height:32, border:'none', borderRadius:8, background:'#F1F5F9',
+  color:C_INK, fontSize:18, fontWeight:700, cursor:'pointer', fontFamily:'inherit',
+};
 function mChip(on) {
   return {
     flexShrink:0, border: on ? `1px solid ${C_BLUE}` : `1px solid ${C_BORDER}`,
@@ -700,6 +890,7 @@ const M_TABS = [
 
 function C_MobileApp({ onPc }) {
   const [tab, setTab] = React.useState('book');
+  const [basis, setBasis] = React.useState('sale');
   React.useEffect(() => { window.__closeMobile = onPc; }, [onPc]);
   return (
     <div style={{
@@ -715,9 +906,9 @@ function C_MobileApp({ onPc }) {
         <div style={{flex:1, minHeight:0, display:'flex', flexDirection:'column'}}>
           {tab === 'book' && <MBoard/>}
           {tab === 'ledger' && <MLedger/>}
-          {tab === 'sales' && <MSales/>}
+          {tab === 'sales' && <MSales basis={basis} setBasis={setBasis}/>}
           {tab === 'sub' && <MSub/>}
-          {tab === 'analysis' && <MAnalysis/>}
+          {tab === 'analysis' && <MAnalysis basis={basis} setBasis={setBasis}/>}
         </div>
         <div style={{
           flexShrink:0, display:'flex', background:'#fff', borderTop:`1px solid ${C_BORDER}`,
