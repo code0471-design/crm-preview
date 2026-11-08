@@ -176,8 +176,6 @@ function MBoard() {
   const selected = designers.filter(d => picked.includes(d.id));
   const dayItems = items.filter(r => (r.date || M_BOARD_DAY) === day && r.status !== 'cancelled' && picked.includes(r.designer));
   const isOff = (id) => mSchedOff(id, day) || dayItems.some(r => r.designer === id && r.type === 'block' && r.blockType === 'dayoff');
-  const offs = selected.filter(d => isOff(d.id));
-  const active = selected.filter(d => !isOff(d.id));
   const slots = [];
   for (let m = window.DAY_START; m < window.DAY_END; m += window.SLOT_MIN) slots.push(m);
   const marked = {};
@@ -222,7 +220,7 @@ function MBoard() {
     <div style={{display:'flex', flexDirection:'column', minHeight:0, flex:1}}>
       <div style={{padding:'12px 16px 8px', background:'#fff'}}>
         <div style={{fontSize:18, fontWeight:800, letterSpacing:'-0.03em'}}>예약현황</div>
-        <div style={{fontSize:12, color:C_MUTED, marginTop:2}}>날짜를 고르고, 담당자는 여러 명 겹쳐 볼 수 있어요.</div>
+        <div style={{fontSize:12, color:C_MUTED, marginTop:2}}>빈 칸을 누르면 예약이나 예약불가를 넣을 수 있어요.</div>
       </div>
       <div style={{background:'#fff', padding:'0 12px 8px'}}>
         <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4}}>
@@ -269,53 +267,75 @@ function MBoard() {
           );
         })}
       </div>
-      <div style={{flex:1, overflow:'auto', padding:'8px 12px 16px'}}>
-        {holiday && <div style={{margin:'4px 6px 8px', fontSize:12, fontWeight:800, color:'#B45309'}}>{holiday}</div>}
-        {offs.map(d => (
-          <div key={d.id} style={{
-            margin:'0 0 8px', padding:'12px 14px', borderRadius:12, fontWeight:800, fontSize:13,
-            background:'repeating-linear-gradient(-45deg, #E2E8F0 0, #E2E8F0 8px, #F1F5F9 8px, #F1F5F9 16px)',
-            color:'#334155',
-          }}>{d.name} · 휴무</div>
-        ))}
-        {active.length === 0 && offs.length === 0 && (
-          <div style={{padding:'28px 8px', textAlign:'center', color:C_MUTED, fontSize:13}}>담당자를 선택해 주세요.</div>
-        )}
-        {active.length > 1 && (
-          <button onClick={() => setSheet({
-            mode:'pick', start:'10:00', designer: active[0].id,
-            free: active.map(d => d.id), pickTime: true,
-          })} style={{...mPrimary, width:'100%', margin:'0 0 8px'}}>예약 등록</button>
-        )}
-        {active.length > 0 && slots.map(min => {
-          const starting = [];
-          const free = [];
-          active.forEach(d => {
-            const hit = cover(d.id, min);
-            if (!hit) free.push(d);
-            else if (window.timeToMin(hit.start) === min) starting.push({ d, hit });
-          });
-          if (!starting.length && active.length > 1) return null;
-          if (!starting.length && !free.length) return null;
-          const freeLabel = free.length <= 2 ? free.map(d => d.name).join(', ') : free[0].name + ' 외 ' + (free.length - 1) + '명';
-          return (
-            <div key={min}>
-              {starting.map(({ d, hit }) => {
+      <div style={{flex:1, overflow:'auto', background:'#fff'}}>
+        {holiday && <div style={{padding:'8px 16px 0', fontSize:12, fontWeight:800, color:'#B45309'}}>{holiday}</div>}
+        {selected.length === 0 && <div style={{padding:28, textAlign:'center', color:C_MUTED, fontSize:13}}>담당자를 선택해 주세요.</div>}
+        {selected.length > 0 && (
+          <div style={{
+            display:'grid',
+            gridTemplateColumns: '46px repeat(' + selected.length + ', 118px)',
+            gridTemplateRows: '36px repeat(' + slots.length + ', 44px)',
+            minWidth: 46 + selected.length * 118,
+          }}>
+            <div style={{position:'sticky', top:0, left:0, zIndex:4, background:'#fff', borderBottom:`1px solid ${C_BORDER}`, borderRight:`1px solid ${C_BORDER}`}}/>
+            {selected.map(d => (
+              <div key={d.id} style={{
+                position:'sticky', top:0, zIndex:2, background:'#fff',
+                borderBottom:`1px solid ${C_BORDER}`, borderRight:`1px solid ${C_BORDER}`,
+                display:'flex', alignItems:'center', justifyContent:'center', gap:5,
+                fontSize:12, fontWeight:800,
+              }}>
+                <span style={{width:6, height:6, borderRadius:'50%', background:d.color}}/>
+                {d.name}
+              </div>
+            ))}
+            {slots.map((min, ri) => (
+              <div key={min} style={{
+                position:'sticky', left:0, zIndex:1, background:'#fff',
+                gridColumn:1, gridRow: ri + 2,
+                borderBottom:`1px solid ${C_BORDER}`, borderRight:`1px solid ${C_BORDER}`,
+                display:'flex', alignItems:'center', justifyContent:'center',
+                fontSize:11, fontWeight:700, color: min % 60 === 0 ? C_INK : '#94A3B8',
+              }}>{window.minToTime(min)}</div>
+            ))}
+            {selected.map((d, ci) => {
+              const col = ci + 2;
+              if (isOff(d.id)) {
+                return (
+                  <div key={d.id} style={{
+                    gridColumn: col, gridRow: '2 / span ' + slots.length,
+                    display:'flex', alignItems:'flex-start', justifyContent:'center', paddingTop:14,
+                    background:'repeating-linear-gradient(-45deg, #E2E8F0 0, #E2E8F0 8px, #F8FAFC 8px, #F8FAFC 16px)',
+                    color:'#64748B', fontSize:12, fontWeight:800, borderRight:`1px solid ${C_BORDER}`,
+                  }}>휴무</div>
+                );
+              }
+              return slots.map((min, ri) => {
+                const hit = cover(d.id, min);
+                if (hit && window.timeToMin(hit.start) !== min) return null;
+                if (!hit) {
+                  return (
+                    <button key={d.id + '-' + min} onClick={() => openEmpty(min, [d])} style={{
+                      gridColumn: col, gridRow: ri + 2,
+                      border:'none', borderBottom:`1px solid ${C_BORDER}`, borderRight:`1px solid ${C_BORDER}`,
+                      background:'#fff', color:'#CBD5E1', fontSize:16, cursor:'pointer', fontFamily:'inherit',
+                    }}>+</button>
+                  );
+                }
+                const span = Math.min(Math.max(1, Math.round(hit.duration / window.SLOT_MIN)), slots.length - ri);
                 if (hit.type === 'block') {
                   return (
                     <div key={hit.id} style={{
-                      display:'flex', gap:10, alignItems:'center', minHeight:52,
-                      borderBottom:`1px solid ${C_BORDER}`, padding:'8px 6px',
+                      gridColumn: col, gridRow: (ri + 2) + ' / span ' + span,
+                      margin:2, borderRadius:8, padding:'4px 6px', overflow:'hidden',
                       background:'repeating-linear-gradient(-45deg, #FFF1F2 0, #FFF1F2 6px, #FFE4E6 6px, #FFE4E6 12px)',
+                      color:'#9F1239',
                     }}>
-                      <div style={{width:46, fontSize:12, fontWeight:800, color:'#BE123C', fontVariantNumeric:'tabular-nums'}}>{hit.start}</div>
-                      <div style={{flex:1, minWidth:0}}>
-                        <div style={{fontSize:12.5, fontWeight:800, color:'#9F1239'}}>{selected.length > 1 ? d.name + ' · ' : ''}예약불가</div>
-                        <div style={{fontSize:12, color:'#BE123C', marginTop:1}}>{hit.reason || hit.label} · {hit.duration}분</div>
-                      </div>
+                      <div style={{fontSize:11, fontWeight:800}}>예약불가</div>
+                      <div style={{fontSize:10, marginTop:1}}>{hit.reason || hit.label}</div>
                       {String(hit.id).indexOf('m') === 0 && (
                         <button onClick={() => setItems(list => list.filter(x => x.id !== hit.id))} style={{
-                          border:'none', background:'#fff', color:'#9F1239', borderRadius:8, padding:'6px 8px', fontSize:11, fontWeight:800, cursor:'pointer',
+                          marginTop:2, border:'none', background:'#fff', color:'#9F1239', borderRadius:6, padding:'2px 6px', fontSize:10, fontWeight:800, cursor:'pointer',
                         }}>해제</button>
                       )}
                     </div>
@@ -324,36 +344,22 @@ function MBoard() {
                 const st = (window.C_STATUS && window.C_STATUS[hit.status]) || { label: hit.status, bg: C_BLUE, text:'#fff' };
                 return (
                   <div key={hit.id} style={{
-                    display:'flex', gap:10, alignItems:'center', minHeight:52,
-                    borderBottom:`1px solid ${C_BORDER}`, padding:'8px 6px',
+                    gridColumn: col, gridRow: (ri + 2) + ' / span ' + span,
+                    margin:2, borderRadius:8, padding:'4px 6px', overflow:'hidden',
+                    background: '#F8FAFC', borderLeft: '3px solid ' + d.color,
                   }}>
-                    <div style={{width:46, fontSize:12, fontWeight:800, color:C_INK, fontVariantNumeric:'tabular-nums'}}>{hit.start}</div>
-                    <div style={{width:3, alignSelf:'stretch', borderRadius:2, background:d.color}}/>
-                    <div style={{flex:1, minWidth:0}}>
-                      <div style={{fontSize:14, fontWeight:800, letterSpacing:'-0.02em'}}>{hit.customer}</div>
-                      <div style={{fontSize:12, color:C_MUTED, marginTop:1}}>{selected.length > 1 ? d.name + ' · ' : ''}{hit.menu} · {hit.duration}분</div>
-                    </div>
+                    <div style={{fontSize:12, fontWeight:800, letterSpacing:'-0.02em'}}>{hit.customer}</div>
+                    <div style={{fontSize:10.5, color:C_MUTED, marginTop:1, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{hit.menu}</div>
                     <span style={{
-                      fontSize:10.5, fontWeight:800, color: st.text, background: st.bg,
-                      borderRadius:8, padding:'3px 6px',
+                      display:'inline-block', marginTop:3, fontSize:10, fontWeight:800,
+                      color: st.text, background: st.bg, borderRadius:6, padding:'1px 5px',
                     }}>{st.label}</span>
                   </div>
                 );
-              })}
-              {free.length > 0 && active.length === 1 && (
-                <button onClick={() => openEmpty(min, free)} style={{
-                  width:'100%', display:'flex', gap:10, alignItems:'center',
-                  border:'none', borderBottom:`1px solid ${C_BORDER}`, background:'transparent',
-                  padding:'0 6px', height:44, cursor:'pointer', fontFamily:'inherit', textAlign:'left',
-                }}>
-                  <div style={{width:46, fontSize:12, fontWeight:700, color:C_MUTED, fontVariantNumeric:'tabular-nums'}}>{starting.length ? '' : window.minToTime(min)}</div>
-                  <div style={{flex:1, fontSize:12.5, color:'#94A3B8'}}>비어 있음{selected.length > 1 ? ' · ' + freeLabel : ''}</div>
-                  <div style={{fontSize:18, color:C_BLUE, fontWeight:500}}>+</div>
-                </button>
-              )}
-            </div>
-          );
-        })}
+              });
+            })}
+          </div>
+        )}
       </div>
       {toast && (
         <div style={{
@@ -365,14 +371,6 @@ function MBoard() {
       {sheet && sheet.mode === 'pick' && (
         <MSheet onClose={() => setSheet(null)}>
           <div style={{fontSize:16, fontWeight:800}}>{sheet.start} · {(designers.find(d => d.id === sheet.designer) || {}).name}</div>
-          {sheet.pickTime && (
-            <div style={{display:'flex', gap:6, overflowX:'auto', marginTop:12}}>
-              {slots.map(min => {
-                const t = window.minToTime(min);
-                return <button key={t} onClick={() => setSheet({ ...sheet, start: t })} style={mChip(sheet.start === t)}>{t}</button>;
-              })}
-            </div>
-          )}
           {sheet.free && sheet.free.length > 1 && (
             <div style={{display:'flex', gap:6, overflowX:'auto', marginTop:12}}>
               {designers.filter(d => sheet.free.includes(d.id)).map(d => (
