@@ -228,7 +228,7 @@ function C_SideBar({ page, onPage }) {
 }
 
 // ============ 헤더 (한 줄) ============
-function C_TopHeader({ onOpenCustomerRegister, onOpenGuestSales, onOpenClosing } = {}) {
+function C_TopHeader({ onOpenCustomerRegister, onOpenGuestSales, onOpenClosing, onOpenMobile } = {}) {
   const [menu, setMenu] = React.useState(false);
   const menuRef = React.useRef(null);
   React.useEffect(() => {
@@ -341,6 +341,10 @@ function C_TopHeader({ onOpenCustomerRegister, onOpenGuestSales, onOpenClosing }
       }}>
         <IconCheck size={14}/> 일일마감
       </button>
+
+      <button onClick={onOpenMobile} style={{
+        ...c_ghostBtn, flexShrink:0, whiteSpace:'nowrap',
+      }}>모바일</button>
     </div>
   );
 }
@@ -2420,8 +2424,10 @@ function C_DesignerPerformance({ designerLoad, maxRev }) {
 
 // ============ 메인 ============
 function VariantC() {
+  const [mobile, setMobile] = React.useState(() => /[?&]mobile=1/.test(location.search) || localStorage.getItem('crm-mobile') === '1');
   const [page, setPage] = React.useState(() => localStorage.getItem('crm-c-page') || 'booking');
   React.useEffect(() => { localStorage.setItem('crm-c-page', page); }, [page]);
+  React.useEffect(() => { localStorage.setItem('crm-mobile', mobile ? '1' : '0'); }, [mobile]);
   const [modal, setModal] = React.useState(null); // 'customer-register' | 'guest-sales' | 'booking-add' | null
   const [bookingSeed, setBookingSeed] = React.useState(null);
   const CustomerRegModal = window.C_CustomerRegisterModal;
@@ -2438,8 +2444,13 @@ function VariantC() {
     window.__openCustomerRegister = () => setModal('customer-register');
     window.__goPage = (pg) => { setSalesTarget(null); setPage(pg); };
     window.__toast = (msg) => setGToast({ msg, key: Date.now() });
+    window.__openMobile = () => setMobile(true);
     return () => { delete window.__openBookingModal; delete window.__openSales; };
   }, []);
+  if (mobile && window.C_MobileApp) {
+    return <window.C_MobileApp onPc={() => setMobile(false)}/>;
+  }
+
   // 총 폭 = 사이드바(64) + 페이지(946) = 1010
   return (
     <div style={{
@@ -2472,6 +2483,7 @@ function VariantC() {
           onOpenCustomerRegister={() => setModal('customer-register')}
           onOpenGuestSales={() => setSalesTarget({ guest:true, key: Date.now() })}
           onOpenClosing={() => { setSalesTarget(null); setPage('closing'); }}
+          onOpenMobile={() => setMobile(true)}
         />
       </div>
       {/* 아래: 좌 사이드바(아이콘) + 우 페이지 콘텐츠 (+ 예약/매장일정 페이지는 우측 사이드 패널 260) */}
