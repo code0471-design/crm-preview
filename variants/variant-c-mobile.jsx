@@ -1075,10 +1075,23 @@ const mCount = {
   fontSize:12, cursor:'pointer', fontFamily:'inherit', padding:'6px 0',
   textDecoration:'underline', textUnderlineOffset:3, flexShrink:0,
 };
-const mMini = {
-  flex:1, height:34, border:`1px solid ${C_BORDER}`, borderRadius:10, background:'#fff',
-  color:C_INK, fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:'inherit',
-};
+function MPerson({ on }) {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="8" r="3.2" stroke={on ? C_BLUE : '#64748B'} strokeWidth="1.8"/>
+      <path d="M5.2 19.2c1.3-3.1 3.6-4.6 6.8-4.6s5.5 1.5 6.8 4.6" stroke={on ? C_BLUE : '#64748B'} strokeWidth="1.8" strokeLinecap="round"/>
+    </svg>
+  );
+}
+function MGear({ on }) {
+  const c = on ? C_BLUE : '#64748B';
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M10.1 2.7h3.8l.6 2.1c.6.2 1.2.5 1.7.9l2-.9 1.9 3.2-1.5 1.6c.1.6.1 1.2 0 1.8l1.5 1.6-1.9 3.2-2-.9c-.5.4-1.1.7-1.7.9l-.6 2.1h-3.8l-.6-2.1a6.6 6.6 0 0 1-1.7-.9l-2 .9-1.9-3.2 1.5-1.6a6.8 6.8 0 0 1 0-1.8L3.9 8l1.9-3.2 2 .9c.5-.4 1.1-.7 1.7-.9l.6-2.1z" stroke={c} strokeWidth="1.5" strokeLinejoin="round"/>
+      <circle cx="12" cy="12" r="2.3" stroke={c} strokeWidth="1.5"/>
+    </svg>
+  );
+}
 
 function MResSheet({ item, day, designers, onClose, onSale }) {
   const des = designers.find(d => d.id === item.designer);
@@ -1285,6 +1298,7 @@ function C_MobileApp({ onPc }) {
   const [sales, setSales] = React.useState('ledger');
   const [basis, setBasis] = React.useState('sale');
   const [form, setForm] = React.useState(null);
+  const [plus, setPlus] = React.useState(false);
   const [toast, setToast] = React.useState('');
   React.useEffect(() => { window.__closeMobile = onPc; }, [onPc]);
   React.useEffect(() => {
@@ -1293,11 +1307,11 @@ function C_MobileApp({ onPc }) {
     return () => clearTimeout(t);
   }, [toast]);
   const done = (msg) => { setForm(null); setToast(msg); };
-  const seg = (on) => ({
-    flex:1, height:36, border:'none', borderRadius:9, cursor:'pointer', fontFamily:'inherit',
-    background: on ? '#fff' : 'transparent', color: on ? C_INK : C_MUTED,
-    fontSize:14, fontWeight:800,
-    boxShadow: on ? '0 1px 2px rgba(15,23,42,0.08)' : 'none',
+  const pickSide = (id) => { setSide(id); setPlus(false); };
+  const openForm = (kind) => { setPlus(false); setForm({ kind }); };
+  const word = (on) => ({
+    border:'none', background:'transparent', cursor:'pointer', fontFamily:'inherit',
+    color: on ? C_BLUE : C_INK, fontSize:16, fontWeight:800, padding:'6px 2px',
   });
   return (
     <div style={{
@@ -1311,14 +1325,40 @@ function C_MobileApp({ onPc }) {
         boxShadow:'0 0 0 1px rgba(15,23,42,0.06)',
       }}>
         {nav === 'home' && (
-          <div style={{flexShrink:0, background:'#fff', borderBottom:`1px solid ${C_BORDER}`}}>
-            <div style={{display:'flex', gap:4, margin:'10px 16px 8px', padding:3, background:'#F1F5F9', borderRadius:12}}>
-              <button onClick={() => setSide('book')} style={seg(side === 'book')}>예약</button>
-              <button onClick={() => setSide('sales')} style={seg(side === 'sales')}>매출</button>
-            </div>
-            <div style={{display:'flex', gap:8, padding:'0 16px 10px'}}>
-              <button onClick={() => setForm({ kind:'customer' })} style={mMini}>고객 등록</button>
-              <button onClick={() => setForm({ kind:'sale' })} style={mMini}>매출 입력</button>
+          <div style={{flexShrink:0, background:'#fff', borderBottom:`1px solid ${C_BORDER}`, position:'relative', zIndex:22}}>
+            {plus && <div onClick={() => setPlus(false)} style={{position:'fixed', inset:0, zIndex:20}}/>}
+            <div style={{display:'flex', alignItems:'center', gap:16, padding:'8px 16px 6px'}}>
+              <button onClick={() => pickSide('book')} style={word(side === 'book')}>예약</button>
+              <button onClick={() => pickSide('sales')} style={word(side === 'sales')}>매출</button>
+              <div style={{position:'relative', zIndex:25}}>
+                <button onClick={() => setPlus(v => !v)} aria-label="추가" style={{
+                  width:34, height:34, borderRadius:'50%', border:'none', cursor:'pointer',
+                  background: plus ? '#1E3A8A' : C_BLUE, color:'#fff', fontSize:22, lineHeight:1, fontFamily:'inherit',
+                }}>+</button>
+                {plus && (
+                  <div style={{
+                    position:'absolute', top:42, left:'50%', transform:'translateX(-50%)', zIndex:25,
+                    width:148, background:'#fff', borderRadius:12, border:`1px solid ${C_BORDER}`,
+                    boxShadow:'0 10px 28px rgba(15,23,42,0.16)', overflow:'hidden',
+                  }}>
+                    <button onClick={() => openForm('customer')} style={{
+                      width:'100%', border:'none', borderBottom:`1px solid ${C_BORDER}`, background:'#fff',
+                      padding:'12px 14px', textAlign:'left', fontSize:14, fontWeight:800, cursor:'pointer', fontFamily:'inherit',
+                    }}>고객 등록</button>
+                    <button onClick={() => openForm('sale')} style={{
+                      width:'100%', border:'none', background:'#fff',
+                      padding:'12px 14px', textAlign:'left', fontSize:14, fontWeight:800, cursor:'pointer', fontFamily:'inherit',
+                    }}>매출 등록</button>
+                  </div>
+                )}
+              </div>
+              <div style={{flex:1}}/>
+              <button onClick={() => pickSide('my')} aria-label="마이" style={{border:'none', background:'transparent', padding:4, cursor:'pointer', display:'flex'}}>
+                <MPerson on={side === 'my'}/>
+              </button>
+              <button onClick={() => pickSide('settings')} aria-label="설정" style={{border:'none', background:'transparent', padding:4, cursor:'pointer', display:'flex'}}>
+                <MGear on={side === 'settings'}/>
+              </button>
             </div>
             {side === 'sales' && (
               <div style={{display:'flex', padding:'0 8px'}}>
@@ -1342,6 +1382,8 @@ function C_MobileApp({ onPc }) {
           {nav === 'home' && side === 'sales' && sales === 'day' && <MSales basis={basis} setBasis={setBasis} mode="day"/>}
           {nav === 'home' && side === 'sales' && sales === 'month' && <MSales basis={basis} setBasis={setBasis} mode="month"/>}
           {nav === 'home' && side === 'sales' && sales === 'analysis' && <MAnalysis basis={basis} setBasis={setBasis}/>}
+          {nav === 'home' && side === 'my' && <MBlank label="마이"/>}
+          {nav === 'home' && side === 'settings' && <MBlank label="설정" onPc={onPc}/>}
           {nav === 'notice' && <MBlank label="공지"/>}
           {nav === 'market' && <MBlank label="마켓"/>}
           {nav === 'edu' && <MBlank label="교육"/>}
