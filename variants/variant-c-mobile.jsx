@@ -1325,12 +1325,15 @@ function MMenuAdmin({ onBack }) {
   const [tab, setTab] = React.useState('service');
   const [catId, setCatId] = React.useState('');
   const [q, setQ] = React.useState('');
+  const [rev, setRev] = React.useState(0);
+  const [editor, setEditor] = React.useState(null);
   const spec = M_MENU_TABS.find(t => t.id === tab);
   const categories = window[spec.categories] || [];
   const all = window[spec.items] || {};
   React.useEffect(() => { setCatId(categories[0] ? categories[0].id : ''); }, [tab]);
   const cat = categories.find(c => c.id === catId) || categories[0];
   const items = ((cat && all[cat.id]) || []).filter(it => !q.trim() || it.name.includes(q.trim()));
+  void rev;
   return (
     <div style={{flex:1, minHeight:0, display:'flex', flexDirection:'column', background:C_BG}}>
       <MSetBar title="메뉴 관리" onBack={onBack}/>
@@ -1343,8 +1346,9 @@ function MMenuAdmin({ onBack }) {
           }}>{t.label}</button>
         ))}
       </div>
-      <div style={{padding:'10px 16px 0'}}>
-        <input value={q} onChange={e => setQ(e.target.value)} placeholder="메뉴 이름 검색" style={mInput}/>
+      <div style={{display:'flex', gap:8, padding:'10px 16px 0'}}>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="메뉴 이름 검색" style={{...mInput, flex:1}}/>
+        <button onClick={() => cat && setEditor({ item:null })} style={{...mPrimary, width:72, height:42, flexShrink:0}}>추가</button>
       </div>
       <div style={{display:'flex', gap:6, overflowX:'auto', padding:'10px 16px'}}>
         {categories.map(c => (
@@ -1354,15 +1358,167 @@ function MMenuAdmin({ onBack }) {
         ))}
       </div>
       <div style={{flex:1, overflow:'auto', margin:'0 16px 16px', background:'#fff', borderRadius:14}}>
-        {items.length === 0 && <div style={{padding:22, textAlign:'center', color:C_MUTED, fontSize:13}}>메뉴가 없어요.</div>}
+        {items.length === 0 && <div style={{padding:22, textAlign:'center', color:C_MUTED, fontSize:13}}>메뉴가 없어요. 추가로 넣을 수 있어요.</div>}
         {items.map((it, i) => (
-          <div key={it.id} style={{padding:'12px 14px', borderTop: i ? `1px solid ${C_BORDER}` : 'none'}}>
-            <div style={{fontSize:14, fontWeight:800}}>{it.name}</div>
+          <button key={it.id} onClick={() => setEditor({ item:it })} style={{
+            width:'100%', textAlign:'left', border:'none', background:'#fff', cursor:'pointer', fontFamily:'inherit',
+            padding:'12px 14px', borderTop: i ? `1px solid ${C_BORDER}` : 'none',
+          }}>
+            <div style={{display:'flex', justifyContent:'space-between', gap:8}}>
+              <div style={{fontSize:14, fontWeight:800, color:C_INK}}>{it.name}</div>
+              <span style={{color:C_MUTED, fontSize:12, fontWeight:700}}>수정</span>
+            </div>
             <div style={{fontSize:12, color:C_MUTED, marginTop:3}}>{mItemSub(it) || '금액 없음'}</div>
-          </div>
+          </button>
         ))}
       </div>
+      {editor && cat && (
+        <MMenuEditor
+          tab={tab}
+          categories={categories}
+          bucket={all}
+          catId={cat.id}
+          item={editor.item}
+          onClose={() => setEditor(null)}
+          onSaved={() => { setEditor(null); setRev(n => n + 1); }}
+        />
+      )}
     </div>
+  );
+}
+
+function mDigits(v) { return String(v == null ? '' : v).replace(/[^0-9]/g, ''); }
+function MMenuEditor({ tab, categories, bucket, catId, item, onClose, onSaved }) {
+  const editing = !!item;
+  const [name, setName] = React.useState(item ? item.name : '');
+  const [category, setCategory] = React.useState(catId);
+  const [price, setPrice] = React.useState(mDigits(item && item.price));
+  const [duration, setDuration] = React.useState(mDigits(item && item.duration));
+  const [stock, setStock] = React.useState(mDigits(item && item.stock));
+  const [brand, setBrand] = React.useState(item && item.brand ? item.brand : '');
+  const [credit, setCredit] = React.useState(mDigits(item && item.credit));
+  const [days, setDays] = React.useState(mDigits(item && item.validDays));
+  const [sessions, setSessions] = React.useState(mDigits(item && item.sessions));
+  const [dtype, setDtype] = React.useState(item && item.type === 'amount' ? 'amount' : 'percent');
+  const [value, setValue] = React.useState(mDigits(item && item.value));
+  const [condition, setCondition] = React.useState(item && item.condition ? item.condition : '');
+  const [desc, setDesc] = React.useState(item && item.desc ? item.desc : '');
+  const [checkin, setCheckin] = React.useState(!!(item && item.checkin));
+  const [ask, setAsk] = React.useState(false);
+  const ready = name.trim().length > 0;
+  const label = { fontSize:12, fontWeight:800, margin:'12px 0 6px' };
+  const save = () => {
+    if (!ready) return;
+    const from = bucket[catId] || [];
+    const to = bucket[category] || (bucket[category] = []);
+    const row = item ? item : { id: Date.now() };
+    row.name = name.trim();
+    if (tab !== 'discount') row.price = Number(price) || 0;
+    if (tab === 'service' || tab === 'bundle') {
+      row.duration = Number(duration) || 0;
+      row.desc = desc;
+    }
+    if (tab === 'service') row.checkin = checkin;
+    if (tab === 'product') { row.stock = Number(stock) || 0; row.brand = brand; }
+    if (tab === 'membership') { row.credit = Number(credit) || 0; row.validDays = Number(days) || 0; }
+    if (tab === 'ticket') { row.sessions = Number(sessions) || 0; row.validDays = Number(days) || 0; }
+    if (tab === 'discount') { row.type = dtype; row.value = Number(value) || 0; row.condition = condition; row.active = item ? item.active !== false : true; }
+    if (item && category !== catId) {
+      const i = from.indexOf(item);
+      if (i >= 0) from.splice(i, 1);
+      to.push(item);
+    } else if (!item) to.push(row);
+    onSaved();
+  };
+  const remove = () => {
+    const list = bucket[catId] || [];
+    const i = list.indexOf(item);
+    if (i >= 0) list.splice(i, 1);
+    onSaved();
+  };
+  return (
+    <MSheet onClose={onClose}>
+      <div style={{fontSize:16, fontWeight:800}}>{editing ? '메뉴 수정' : '메뉴 추가'}</div>
+      <div style={label}>카테고리</div>
+      <div style={{display:'flex', gap:6, overflowX:'auto'}}>
+        {categories.map(c => (
+          <button key={c.id} onClick={() => setCategory(c.id)} style={mChip(category === c.id)}>{c.name}</button>
+        ))}
+      </div>
+      <div style={label}>메뉴명</div>
+      <input value={name} onChange={e => setName(e.target.value)} placeholder="이름" style={mInput}/>
+      {tab !== 'discount' && (
+        <div>
+          <div style={label}>가격</div>
+          <input value={price} onChange={e => setPrice(mDigits(e.target.value))} inputMode="numeric" placeholder="0" style={mInput}/>
+        </div>
+      )}
+      {(tab === 'service' || tab === 'bundle') && (
+        <div>
+          <div style={label}>소요시간 (분)</div>
+          <input value={duration} onChange={e => setDuration(mDigits(e.target.value))} inputMode="numeric" placeholder="0" style={mInput}/>
+          <div style={label}>설명</div>
+          <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="선택" style={mInput}/>
+        </div>
+      )}
+      {tab === 'service' && (
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:12}}>
+          <div style={{fontSize:13, fontWeight:800}}>셀프체크인 노출</div>
+          <MToggle on={checkin} setOn={setCheckin}/>
+        </div>
+      )}
+      {tab === 'product' && (
+        <div>
+          <div style={label}>재고</div>
+          <input value={stock} onChange={e => setStock(mDigits(e.target.value))} inputMode="numeric" placeholder="0" style={mInput}/>
+          <div style={label}>브랜드</div>
+          <input value={brand} onChange={e => setBrand(e.target.value)} placeholder="브랜드" style={mInput}/>
+        </div>
+      )}
+      {tab === 'membership' && (
+        <div>
+          <div style={label}>적립액</div>
+          <input value={credit} onChange={e => setCredit(mDigits(e.target.value))} inputMode="numeric" placeholder="0" style={mInput}/>
+          <div style={label}>사용기간 (일)</div>
+          <input value={days} onChange={e => setDays(mDigits(e.target.value))} inputMode="numeric" placeholder="0" style={mInput}/>
+        </div>
+      )}
+      {tab === 'ticket' && (
+        <div>
+          <div style={label}>횟수</div>
+          <input value={sessions} onChange={e => setSessions(mDigits(e.target.value))} inputMode="numeric" placeholder="0" style={mInput}/>
+          <div style={label}>사용기간 (일)</div>
+          <input value={days} onChange={e => setDays(mDigits(e.target.value))} inputMode="numeric" placeholder="0" style={mInput}/>
+        </div>
+      )}
+      {tab === 'discount' && (
+        <div>
+          <div style={label}>할인 방식</div>
+          <div style={{display:'flex', gap:6}}>
+            <button onClick={() => setDtype('percent')} style={mChip(dtype === 'percent')}>정률 %</button>
+            <button onClick={() => setDtype('amount')} style={mChip(dtype === 'amount')}>정액 원</button>
+          </div>
+          <div style={label}>{dtype === 'percent' ? '할인율' : '할인 금액'}</div>
+          <input value={value} onChange={e => setValue(mDigits(e.target.value))} inputMode="numeric" placeholder="0" style={mInput}/>
+          <div style={label}>조건</div>
+          <input value={condition} onChange={e => setCondition(e.target.value)} placeholder="예: 첫 방문만" style={mInput}/>
+        </div>
+      )}
+      {ask ? (
+        <div style={{marginTop:16}}>
+          <div style={{fontSize:13, fontWeight:800, marginBottom:8}}>이 메뉴를 삭제할까요?</div>
+          <div style={{display:'flex', gap:8}}>
+            <button onClick={() => setAsk(false)} style={{...mGhost, flex:1}}>취소</button>
+            <button onClick={remove} style={{...mPrimary, flex:1, background:'#DC2626'}}>삭제</button>
+          </div>
+        </div>
+      ) : (
+        <div style={{display:'flex', gap:8, marginTop:16}}>
+          {editing && <button onClick={() => setAsk(true)} style={{...mGhost, flex:1, color:'#DC2626'}}>삭제</button>}
+          <button disabled={!ready} onClick={save} style={{...mPrimary, flex:1, opacity: ready ? 1 : 0.4}}>저장</button>
+        </div>
+      )}
+    </MSheet>
   );
 }
 
