@@ -31,6 +31,42 @@ const M_PAY = [
   { id:'gift', name:'상품권', color:'#F59E0B' },
 ];
 const M_CAT = { cut:'커트', color:'염색', perm:'펌', clinic:'클리닉', product:'제품' };
+const M_VISIT = { revisit:'재방문', new:'신규', intro:'소개', naver:'네이버', walkin:'워크인' };
+const M_PRICE = {
+  '커트':25000, '남성컷':20000, '염색':130000, '펌':180000, '클리닉':80000, '드라이':15000, '헤어스파':70000,
+  '루트터치업':70000, '디지털펌':180000, '전체염색':130000, '앞머리컷':15000, '컷 + 클리닉':90000,
+};
+function mMenuPrice(name) { return M_PRICE[name] || 0; }
+function mCatOf(menu) {
+  if (/펌|매직/.test(menu)) return 'perm';
+  if (/염색|컬러|톤/.test(menu)) return 'color';
+  if (/클리닉|스파/.test(menu)) return 'clinic';
+  if (/샴푸|제품/.test(menu)) return 'product';
+  return 'cut';
+}
+function mPhone(v) {
+  const d = String(v || '').replace(/\D/g, '').slice(0, 11);
+  if (d.length < 4) return d;
+  if (d.length < 8) return d.slice(0, 3) + '-' + d.slice(3);
+  return d.slice(0, 3) + '-' + d.slice(3, 7) + '-' + d.slice(7);
+}
+function mPayText(r) {
+  const bits = [];
+  const useName = { membership:'정액권 사용', ticket:'티켓 사용', deposit:'예약금', point:'포인트' };
+  Object.entries(r.pay || {}).forEach(([k, v]) => {
+    if (v) bits.push(((M_PAY.find(p => p.id === k) || {}).name || k) + ' ' + mWon(v));
+  });
+  Object.entries(r.use || {}).forEach(([k, v]) => { if (v) bits.push((useName[k] || k) + ' ' + mWon(v)); });
+  return bits.join(' · ');
+}
+function mRowLabel(r) {
+  if (r.cat && M_CAT[r.cat]) return M_CAT[r.cat];
+  if (r.kind === 'membership') return '정액권';
+  if (r.kind === 'ticket') return '티켓';
+  if (r.kind === 'deposit') return '예약금';
+  if (r.kind === 'product') return '제품';
+  return '시술';
+}
 const M_WD = ['일', '월', '화', '수', '목', '금', '토'];
 const M_HOURS = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
 
@@ -166,7 +202,7 @@ function mSchedOff(designerId, iso) {
   if (iso === M_BOARD_DAY) return false;
   return (window.SCHEDULE_EVENTS || []).some(e => e.type === 'dayoff' && e.designerId === designerId && e.date === iso);
 }
-function MBoard() {
+function MBoard({ onSale }) {
   const designers = (window.DESIGNERS || []).filter(d => d.id !== 'unassigned');
   const [day, setDay] = React.useState(M_BOARD_DAY);
   const [items, setItems] = React.useState(() => (window.RESERVATIONS || []).map(r => ({ ...r, date: r.date || M_BOARD_DAY })));
@@ -309,18 +345,19 @@ function MBoard() {
                 }
                 const st = (window.C_STATUS && window.C_STATUS[hit.status]) || { label: hit.status, bg: C_BLUE, text:'#fff' };
                 return (
-                  <div key={hit.id} style={{
+                  <button key={hit.id} onClick={() => setSheet({ mode:'res', item: hit })} style={{
                     gridColumn: col, gridRow: (ri + 2) + ' / span ' + span,
-                    margin:2, borderRadius:8, padding:'4px 6px', overflow:'hidden',
-                    background: '#F8FAFC', borderLeft: '3px solid ' + d.color,
+                    margin:2, borderRadius:8, padding:'4px 6px', overflow:'hidden', textAlign:'left',
+                    background: '#F8FAFC', border:'none', borderLeft: '3px solid ' + d.color,
+                    cursor:'pointer', fontFamily:'inherit',
                   }}>
-                    <div style={{fontSize:12, fontWeight:800, letterSpacing:'-0.02em'}}>{hit.customer}</div>
+                    <div style={{fontSize:12, fontWeight:800, letterSpacing:'-0.02em', color:C_INK}}>{hit.customer}</div>
                     <div style={{fontSize:10.5, color:C_MUTED, marginTop:1, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{hit.menu}</div>
                     <span style={{
                       display:'inline-block', marginTop:3, fontSize:10, fontWeight:800,
                       color: st.text, background: st.bg, borderRadius:6, padding:'1px 5px',
                     }}>{st.label}</span>
-                  </div>
+                  </button>
                 );
               });
             })}
@@ -333,6 +370,25 @@ function MBoard() {
           background:'#0F172A', color:'#fff', borderRadius:12, padding:'10px 12px',
           fontSize:13, fontWeight:700, textAlign:'center',
         }}>{toast}</div>
+      )}
+      {sheet && sheet.mode === 'res' && (
+        <MResSheet
+          item={sheet.item}
+          day={day}
+          designers={designers}
+          onClose={() => setSheet(null)}
+          onSale={() => {
+            const item = sheet.item;
+            setSheet(null);
+            onSale && onSale({
+              customer: item.customer,
+              menu: item.menu,
+              designer: item.designer,
+              date: item.date || day,
+              start: item.start,
+            });
+          }}
+        />
       )}
       {sheet && sheet.mode === 'pick' && (
         <MSheet onClose={() => setSheet(null)}>
@@ -581,7 +637,6 @@ function MSales({ basis, setBasis, mode }) {
       }));
   const periodRows = mode === 'day' ? all.filter(r => r.m === 10) : all.filter(r => r.m === 9 || r.m === 10);
   const head = mBucket(periodRows, basis);
-  const max = Math.max(1, ...groups.map(g => mBucket(g.rows, basis).total));
   return (
     <div style={{flex:1, overflow:'auto', background:C_BG}}>
       <div style={{height:12}}/>
@@ -599,9 +654,6 @@ function MSales({ basis, setBasis, mode }) {
               <div style={{display:'flex', justifyContent:'space-between', alignItems:'baseline', gap:8}}>
                 <div style={{fontSize:14, fontWeight:800}}>{g.title}</div>
                 <div style={{fontSize:14, fontWeight:800}}>{mWon(box.total)}원</div>
-              </div>
-              <div style={{height:6, borderRadius:4, background:'#EEF2FF', marginTop:8}}>
-                <div style={{width:`${Math.max(box.total ? 4 : 0, box.total / max * 100)}%`, height:'100%', borderRadius:4, background:C_BLUE}}/>
               </div>
               <MBits label="고객 유형" items={[
                 { name:'신규', amount: box.fresh, extra: box.freshN + '건' },
@@ -682,6 +734,7 @@ function MAnalysis({ basis, setBasis }) {
   const presets = (window.ST_PRESETS || []).filter(p => p.id === 'today' || p.id === 'month' || p.id === 'last');
   const [preset, setPreset] = React.useState('month');
   const [open, setOpen] = React.useState(false);
+  const [detail, setDetail] = React.useState(null);
   const range = presets.find(p => p.id === preset) || presets[0];
   const rows = window.stRowsFor ? window.stRowsFor(preset) : [];
   const counted = rows.filter(r => basis !== 'use' || (r.service || 0) > 0);
@@ -733,6 +786,46 @@ function MAnalysis({ basis, setBasis }) {
   const dotColor = { '시술':'#4F46E5', '제품':'#94A3B8', '정액권':'#818CF8', '티켓':'#F59E0B', '예약금':'#CBD5E1' };
   const dots = br.kinds.filter(d => d.amount > 0).map(d => ({ ...d, color: dotColor[d.name] || '#94A3B8' }));
   const burns = br.burns.map(d => ({ ...d, color: d.name.indexOf('티켓') === 0 ? '#F59E0B' : '#818CF8' }));
+  const openRows = (title, list) => {
+    const lines = list.slice().sort((a, b) => (b.m - a.m) || (b.day - a.day));
+    setDetail({ title, lines });
+  };
+  if (detail) {
+    const sum = detail.lines.reduce((a, r) => a + mAmt(r, basis), 0);
+    const count = detail.lines.reduce((a, r) => a + (r.n || 1), 0);
+    return (
+      <div style={{flex:1, overflow:'auto', background:'#F8FAFC'}}>
+        <div style={{position:'sticky', top:0, background:'#fff', borderBottom:`1px solid ${C_BORDER}`, padding:'10px 12px', display:'flex', alignItems:'center', gap:8, zIndex:2}}>
+          <button onClick={() => setDetail(null)} style={{...mNav, fontSize:16}}>‹</button>
+          <div style={{fontSize:16, fontWeight:800}}>{detail.title}</div>
+        </div>
+        <div style={{margin:'12px 16px', background:'#fff', borderRadius:14, padding:'14px 16px'}}>
+          <div style={{fontSize:12, color:C_MUTED, fontWeight:700}}>{count}건</div>
+          <div style={{fontSize:26, fontWeight:800, letterSpacing:'-0.04em', marginTop:2}}>{mWon(sum)}원</div>
+        </div>
+        <div style={{margin:'0 16px 20px', background:'#fff', borderRadius:14, overflow:'hidden'}}>
+          {detail.lines.length === 0 && <div style={{padding:22, textAlign:'center', color:C_MUTED, fontSize:13}}>이 조건의 매출이 없어요.</div>}
+          {detail.lines.map((r, i) => {
+            const des = (window.ST_DES || []).find(d => d.id === r.designer);
+            return (
+              <div key={r.m + '-' + r.day + '-' + r.designer + '-' + (r.cat || r.kind) + '-' + i} style={{padding:'12px 14px', borderTop: i ? `1px solid ${C_BORDER}` : 'none'}}>
+                <div style={{display:'flex', justifyContent:'space-between', gap:8}}>
+                  <div style={{fontSize:14, fontWeight:800}}>{r.m}월 {r.day}일 · {des ? des.name : ''}</div>
+                  <div style={{fontSize:14, fontWeight:800}}>{mWon(mAmt(r, basis))}원</div>
+                </div>
+                <div style={{fontSize:12, color:C_MUTED, marginTop:3}}>
+                  {mRowLabel(r)}
+                  {M_VISIT[r.visit] ? ' · ' + M_VISIT[r.visit] : ''}
+                  {(r.n || 1) > 1 ? ' · ' + r.n + '건' : ''}
+                </div>
+                {mPayText(r) && <div style={{fontSize:12, color:C_MUTED, marginTop:2}}>{mPayText(r)}</div>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{flex:1, overflow:'auto', background:'#F8FAFC'}}>
@@ -819,7 +912,7 @@ function MAnalysis({ basis, setBasis }) {
               <div style={{width:`${d.pay / desMax * 100}%`, height:'100%', borderRadius:4, background:'#6366F1'}}/>
             </div>
             <span style={{width:92, textAlign:'right', fontSize:12, fontWeight:800}}>{mWon(d.pay)}원</span>
-            <span style={{width:36, textAlign:'right', fontSize:11, color:C_MUTED}}>{d.n}건</span>
+            <button onClick={() => openRows(d.name, counted.filter(r => r.designer === d.id))} style={mCount}>{d.n}건</button>
           </div>
         ))}
       </MCard>
@@ -831,7 +924,7 @@ function MAnalysis({ basis, setBasis }) {
             <div style={{height:8, borderRadius:4, background:'#EEF2F7'}}>
               <div style={{width:`${h.pay / hourMax * 100}%`, height:'100%', borderRadius:4, background:'#818CF8'}}/>
             </div>
-            <span style={{textAlign:'right', color:C_MUTED}}>{h.n}건</span>
+            <button onClick={() => openRows(mPad(h.h) + '시', counted.filter(r => mHour(r) === h.h))} style={{...mCount, width:64}}>{h.n}건</button>
           </div>
         ))}
       </MCard>
@@ -855,7 +948,7 @@ function MAnalysis({ basis, setBasis }) {
         {menus.map(m => (
           <div key={m.id} style={{display:'grid', gridTemplateColumns:'1fr 48px 88px 48px', gap:6, padding:'7px 0', borderTop:`1px solid ${C_BORDER}`, fontSize:13}}>
             <b>{m.name}</b>
-            <span style={{textAlign:'right'}}>{m.n}건</span>
+            <button onClick={() => openRows(m.name, counted.filter(r => r.cat === m.id))} style={{...mCount, width:'auto', justifySelf:'end'}}>{m.n}건</button>
             <span style={{textAlign:'right', fontWeight:800}}>{mWon(m.amount)}원</span>
             <span style={{textAlign:'right', color:C_MUTED}}>{menuSum ? Math.round(m.amount / menuSum * 1000) / 10 : 0}%</span>
           </div>
@@ -977,6 +1070,186 @@ function mChip(on) {
     fontFamily:'inherit', cursor:'pointer',
   };
 }
+const mCount = {
+  border:'none', background:'transparent', color:C_BLUE, fontWeight:800,
+  fontSize:12, cursor:'pointer', fontFamily:'inherit', padding:'6px 0',
+  textDecoration:'underline', textUnderlineOffset:3, flexShrink:0,
+};
+const mMini = {
+  flex:1, height:34, border:`1px solid ${C_BORDER}`, borderRadius:10, background:'#fff',
+  color:C_INK, fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:'inherit',
+};
+
+function MResSheet({ item, day, designers, onClose, onSale }) {
+  const des = designers.find(d => d.id === item.designer);
+  const cust = (window.CUSTOMERS || []).find(c => c.name === item.customer);
+  const st = (window.C_STATUS && window.C_STATUS[item.status]) || { label: item.status || '예약' };
+  const end = window.minToTime(window.timeToMin(item.start) + (item.duration || 0));
+  const dt = mParse(item.date || day);
+  return (
+    <MSheet onClose={onClose}>
+      <div style={{fontSize:12, color:C_MUTED, fontWeight:700}}>예약 상세</div>
+      <div style={{fontSize:18, fontWeight:800, marginTop:2}}>{item.customer}</div>
+      {cust && cust.phone && <div style={{fontSize:13, color:C_MUTED, marginTop:2}}>{cust.phone}</div>}
+      <div style={{marginTop:12, fontSize:14, fontWeight:800}}>{dt.getMonth() + 1}월 {dt.getDate()}일 {item.start}–{end}</div>
+      <div style={{fontSize:13, color:C_MUTED, marginTop:4}}>{des ? des.name : ''} · {item.menu}</div>
+      <div style={{marginTop:8, fontSize:12, fontWeight:800, color:C_BLUE}}>{st.label}</div>
+      {item.memo && <div style={{marginTop:8, fontSize:13, lineHeight:1.45}}>{item.memo}</div>}
+      <button onClick={onSale} style={{...mPrimary, width:'100%', marginTop:16}}>매출 입력</button>
+    </MSheet>
+  );
+}
+
+function MCustomerSheet({ onClose, onDone }) {
+  const designers = (window.DESIGNERS || []).filter(d => d.id !== 'unassigned');
+  const [name, setName] = React.useState('');
+  const [phone, setPhone] = React.useState('');
+  const [gender, setGender] = React.useState('none');
+  const [designer, setDesigner] = React.useState('');
+  const ready = name.trim() && phone.replace(/\D/g, '').length >= 10;
+  return (
+    <MSheet onClose={onClose}>
+      <div style={{fontSize:16, fontWeight:800}}>고객 등록</div>
+      <div style={{fontSize:12, fontWeight:800, margin:'14px 0 6px'}}>고객명</div>
+      <input value={name} onChange={e => setName(e.target.value)} placeholder="이름" style={mInput}/>
+      <div style={{fontSize:12, fontWeight:800, margin:'14px 0 6px'}}>전화번호</div>
+      <input value={phone} onChange={e => setPhone(mPhone(e.target.value))} placeholder="010-0000-0000" inputMode="numeric" style={mInput}/>
+      <div style={{fontSize:12, fontWeight:800, margin:'14px 0 6px'}}>성별</div>
+      <div style={{display:'flex', gap:6}}>
+        {[{id:'female', label:'여성'}, {id:'male', label:'남성'}, {id:'none', label:'선택안함'}].map(g => (
+          <button key={g.id} onClick={() => setGender(g.id)} style={mChip(gender === g.id)}>{g.label}</button>
+        ))}
+      </div>
+      <div style={{fontSize:12, fontWeight:800, margin:'14px 0 6px'}}>담당자</div>
+      <div style={{display:'flex', gap:6, overflowX:'auto'}}>
+        <button onClick={() => setDesigner('')} style={mChip(designer === '')}>없음</button>
+        {designers.map(d => (
+          <button key={d.id} onClick={() => setDesigner(d.id)} style={mChip(designer === d.id)}>{d.name}</button>
+        ))}
+      </div>
+      <button disabled={!ready} onClick={() => {
+        const list = window.CUSTOMERS || [];
+        list.unshift({
+          id: Date.now(), name: name.trim(), phone, tags: [], lastVisit: '-', totalVisits: 0,
+          mainDesigner: designer || 'unassigned', memo: '', gender,
+        });
+        window.CUSTOMERS = list;
+        onDone(name.trim() + ' 고객을 등록했어요.');
+      }} style={{...mPrimary, width:'100%', marginTop:16, opacity: ready ? 1 : 0.4}}>등록</button>
+    </MSheet>
+  );
+}
+
+function MSaleSheet({ prefill, onClose, onDone }) {
+  const designers = (window.DESIGNERS || []).filter(d => d.id !== 'unassigned');
+  const presetMenu = prefill && prefill.menu;
+  const menus = presetMenu && !M_MENUS.some(m => m.name === presetMenu)
+    ? [{ name: presetMenu }].concat(M_MENUS)
+    : M_MENUS;
+  const [q, setQ] = React.useState('');
+  const [customer, setCustomer] = React.useState(prefill && prefill.customer ? { name: prefill.customer } : null);
+  const [designer, setDesigner] = React.useState(prefill && prefill.designer ? prefill.designer : (designers[0] ? designers[0].id : ''));
+  const [menu, setMenu] = React.useState(presetMenu || M_MENUS[0].name);
+  const [amount, setAmount] = React.useState(String(mMenuPrice(presetMenu || M_MENUS[0].name) || ''));
+  const [pay, setPay] = React.useState('card');
+  const [date, setDate] = React.useState(prefill && prefill.date ? prefill.date : '2026-10-17');
+  const digits = q.replace(/\D/g, '');
+  const found = q.trim()
+    ? (window.CUSTOMERS || []).filter(c => c.name.includes(q.trim()) || (digits && c.phone.replace(/-/g, '').includes(digits))).slice(0, 6)
+    : [];
+  const name = customer ? customer.name : '';
+  const amt = Math.round(Number(String(amount).replace(/,/g, '')) || 0);
+  const ready = name && amt > 0 && designer && menu;
+  const pays = [
+    { id:'card', label:'카드' },
+    { id:'cash', label:'현금' },
+    { id:'bank', label:'계좌' },
+    { id:'naver', label:'네이버' },
+  ];
+  return (
+    <MSheet onClose={onClose}>
+      <div style={{fontSize:16, fontWeight:800}}>매출 입력</div>
+      {prefill && prefill.start && (
+        <div style={{fontSize:12.5, color:C_MUTED, marginTop:2}}>{prefill.start} 예약에서 가져왔어요.</div>
+      )}
+      <div style={{fontSize:12, fontWeight:800, margin:'14px 0 6px'}}>고객</div>
+      {customer ? (
+        <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:8}}>
+          <div style={{fontSize:14, fontWeight:800}}>{customer.name}</div>
+          {!prefill && <button onClick={() => setCustomer(null)} style={{...mChip(false), color:C_MUTED}}>바꾸기</button>}
+        </div>
+      ) : (
+        <div>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="이름 또는 전화번호" style={mInput}/>
+          {q.trim() && (
+            <div style={{marginTop:6, border:`1px solid ${C_BORDER}`, borderRadius:10, overflow:'hidden'}}>
+              {found.length === 0 && <div style={{padding:12, fontSize:12.5, color:C_MUTED}}>찾는 고객이 없어요. 고객 등록을 먼저 해 주세요.</div>}
+              {found.map(c => (
+                <button key={c.id} onClick={() => { setCustomer(c); setQ(''); }} style={{
+                  width:'100%', textAlign:'left', border:'none', borderBottom:`1px solid ${C_BORDER}`,
+                  background:'#fff', padding:'10px 12px', cursor:'pointer', fontFamily:'inherit',
+                }}>
+                  <div style={{fontSize:13.5, fontWeight:800}}>{c.name}</div>
+                  <div style={{fontSize:11.5, color:C_MUTED, marginTop:1}}>{c.phone}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      <div style={{fontSize:12, fontWeight:800, margin:'14px 0 6px'}}>날짜</div>
+      <input type="date" value={date} onChange={e => setDate(e.target.value)} style={mInput}/>
+      <div style={{fontSize:12, fontWeight:800, margin:'14px 0 6px'}}>담당자</div>
+      <div style={{display:'flex', gap:6, overflowX:'auto'}}>
+        {designers.map(d => (
+          <button key={d.id} onClick={() => setDesigner(d.id)} style={mChip(designer === d.id)}>{d.name}</button>
+        ))}
+      </div>
+      <div style={{fontSize:12, fontWeight:800, margin:'14px 0 6px'}}>시술</div>
+      <div style={{display:'flex', flexWrap:'wrap', gap:6}}>
+        {menus.map(item => (
+          <button key={item.name} onClick={() => {
+            setMenu(item.name);
+            const price = mMenuPrice(item.name);
+            if (price) setAmount(String(price));
+          }} style={mChip(menu === item.name)}>{item.name}</button>
+        ))}
+      </div>
+      <div style={{fontSize:12, fontWeight:800, margin:'14px 0 6px'}}>금액</div>
+      <input value={amount} onChange={e => setAmount(e.target.value.replace(/[^0-9]/g, ''))} inputMode="numeric" placeholder="0" style={mInput}/>
+      <div style={{fontSize:12, fontWeight:800, margin:'14px 0 6px'}}>결제</div>
+      <div style={{display:'flex', gap:6}}>
+        {pays.map(p => (
+          <button key={p.id} onClick={() => setPay(p.id)} style={mChip(pay === p.id)}>{p.label}</button>
+        ))}
+      </div>
+      <button disabled={!ready} onClick={() => {
+        const des = designers.find(d => d.id === designer);
+        const cust = (window.CUSTOMERS || []).find(c => c.name === name);
+        const fresh = !cust || !cust.totalVisits;
+        const kind = /샴푸|제품/.test(menu) ? 'product' : 'service';
+        const parts = (date || '2026-10-17').split('-').map(Number);
+        if (window.LEDGER_ROWS) {
+          window.LEDGER_ROWS.unshift({
+            date, time: (prefill && prefill.start) || '10:00', customer: name, menu,
+            designer: des ? des.name : '', designerId: des ? des.id : '',
+            kind, visit: fresh ? 'fresh' : 'returning', list: amt, discount: 0, pay,
+            cardLink: pay === 'card' ? 'solo' : undefined, amount: amt,
+          });
+        }
+        if (window.ST_ROWS && parts.length === 3) {
+          window.ST_ROWS.push({
+            m: parts[1], day: parts[2], designer: des ? des.id : '',
+            visit: fresh ? 'new' : 'revisit',
+            cat: kind === 'product' ? 'product' : mCatOf(menu),
+            kind, service: amt, pay: { [pay]: amt }, use: {}, n: 1,
+          });
+        }
+        onDone(name + ' 매출을 입력했어요.');
+      }} style={{...mPrimary, width:'100%', marginTop:16, opacity: ready ? 1 : 0.4}}>매출 저장</button>
+    </MSheet>
+  );
+}
 
 const M_NAV = [
   { id:'home', label:'예약/매출', icon:'▦' },
@@ -1011,7 +1284,15 @@ function C_MobileApp({ onPc }) {
   const [side, setSide] = React.useState('book');
   const [sales, setSales] = React.useState('ledger');
   const [basis, setBasis] = React.useState('sale');
+  const [form, setForm] = React.useState(null);
+  const [toast, setToast] = React.useState('');
   React.useEffect(() => { window.__closeMobile = onPc; }, [onPc]);
+  React.useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(''), 1800);
+    return () => clearTimeout(t);
+  }, [toast]);
+  const done = (msg) => { setForm(null); setToast(msg); };
   const seg = (on) => ({
     flex:1, height:36, border:'none', borderRadius:9, cursor:'pointer', fontFamily:'inherit',
     background: on ? '#fff' : 'transparent', color: on ? C_INK : C_MUTED,
@@ -1035,6 +1316,10 @@ function C_MobileApp({ onPc }) {
               <button onClick={() => setSide('book')} style={seg(side === 'book')}>예약</button>
               <button onClick={() => setSide('sales')} style={seg(side === 'sales')}>매출</button>
             </div>
+            <div style={{display:'flex', gap:8, padding:'0 16px 10px'}}>
+              <button onClick={() => setForm({ kind:'customer' })} style={mMini}>고객 등록</button>
+              <button onClick={() => setForm({ kind:'sale' })} style={mMini}>매출 입력</button>
+            </div>
             {side === 'sales' && (
               <div style={{display:'flex', padding:'0 8px'}}>
                 {M_SALES.map(s => {
@@ -1052,7 +1337,7 @@ function C_MobileApp({ onPc }) {
           </div>
         )}
         <div style={{flex:1, minHeight:0, display:'flex', flexDirection:'column'}}>
-          {nav === 'home' && side === 'book' && <MBoard/>}
+          {nav === 'home' && side === 'book' && <MBoard onSale={(prefill) => setForm({ kind:'sale', prefill })}/>}
           {nav === 'home' && side === 'sales' && sales === 'ledger' && <MLedger/>}
           {nav === 'home' && side === 'sales' && sales === 'day' && <MSales basis={basis} setBasis={setBasis} mode="day"/>}
           {nav === 'home' && side === 'sales' && sales === 'month' && <MSales basis={basis} setBasis={setBasis} mode="month"/>}
@@ -1062,6 +1347,22 @@ function C_MobileApp({ onPc }) {
           {nav === 'edu' && <MBlank label="교육"/>}
           {nav === 'more' && <MBlank label="더보기" onPc={onPc}/>}
         </div>
+        {form && form.kind === 'customer' && <MCustomerSheet onClose={() => setForm(null)} onDone={done}/>}
+        {form && form.kind === 'sale' && (
+          <MSaleSheet
+            key={form.prefill ? (form.prefill.customer || '') + (form.prefill.start || '') : 'blank'}
+            prefill={form.prefill}
+            onClose={() => setForm(null)}
+            onDone={done}
+          />
+        )}
+        {toast && (
+          <div style={{
+            position:'absolute', left:16, right:16, bottom:78, zIndex:60,
+            background:'#0F172A', color:'#fff', borderRadius:12, padding:'10px 12px',
+            fontSize:13, fontWeight:700, textAlign:'center',
+          }}>{toast}</div>
+        )}
         <div style={{
           flexShrink:0, display:'flex', background:'#fff', borderTop:`1px solid ${C_BORDER}`,
           padding:'6px 2px 10px',
