@@ -1292,6 +1292,323 @@ function MBlank({ label, onPc }) {
   );
 }
 
+function MSetBar({ title, onBack }) {
+  return (
+    <div style={{flexShrink:0, display:'flex', alignItems:'center', gap:8, padding:'10px 12px', background:'#fff', borderBottom:`1px solid ${C_BORDER}`}}>
+      <button onClick={onBack} style={mNav}>‹</button>
+      <div style={{fontSize:16, fontWeight:800}}>{title}</div>
+    </div>
+  );
+}
+
+const M_MENU_TABS = [
+  { id:'service', label:'시술', categories:'MENU_CATEGORIES', items:'MENU_ITEMS' },
+  { id:'product', label:'제품', categories:'PRODUCT_CATEGORIES', items:'PRODUCT_ITEMS' },
+  { id:'membership', label:'정액권', categories:'MEMBERSHIP_CATEGORIES', items:'MEMBERSHIP_ITEMS' },
+  { id:'ticket', label:'티켓', categories:'PACKAGE_CATEGORIES', items:'PACKAGE_ITEMS' },
+  { id:'bundle', label:'중복메뉴', categories:'CUSTOM_CATEGORIES', items:'CUSTOM_ITEMS' },
+  { id:'discount', label:'할인설정', categories:'DISCOUNT_CATEGORIES', items:'DISCOUNT_ITEMS' },
+];
+function mItemSub(it) {
+  const bits = [];
+  if (it.price != null) bits.push(mWon(it.price) + '원');
+  if (it.credit != null) bits.push('적립 ' + mWon(it.credit));
+  if (it.duration) bits.push(it.duration + '분');
+  if (it.sessions) bits.push(it.sessions + '회');
+  if (it.stock != null) bits.push('재고 ' + it.stock);
+  if (it.value != null) bits.push(it.type === 'percent' ? it.value + '%' : mWon(it.value) + '원');
+  if (it.condition) bits.push(it.condition);
+  if (it.combo) bits.push(it.combo);
+  return bits.join(' · ');
+}
+function MMenuAdmin({ onBack }) {
+  const [tab, setTab] = React.useState('service');
+  const [catId, setCatId] = React.useState('');
+  const [q, setQ] = React.useState('');
+  const spec = M_MENU_TABS.find(t => t.id === tab);
+  const categories = window[spec.categories] || [];
+  const all = window[spec.items] || {};
+  React.useEffect(() => { setCatId(categories[0] ? categories[0].id : ''); }, [tab]);
+  const cat = categories.find(c => c.id === catId) || categories[0];
+  const items = ((cat && all[cat.id]) || []).filter(it => !q.trim() || it.name.includes(q.trim()));
+  return (
+    <div style={{flex:1, minHeight:0, display:'flex', flexDirection:'column', background:C_BG}}>
+      <MSetBar title="메뉴 관리" onBack={onBack}/>
+      <div style={{display:'flex', background:'#fff', borderBottom:`1px solid ${C_BORDER}`, overflowX:'auto'}}>
+        {M_MENU_TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            flexShrink:0, border:'none', background:'transparent', cursor:'pointer', fontFamily:'inherit',
+            color: tab === t.id ? C_BLUE : C_MUTED, fontSize:13, fontWeight:800,
+            padding:'10px 12px', borderBottom: tab === t.id ? `2px solid ${C_BLUE}` : '2px solid transparent',
+          }}>{t.label}</button>
+        ))}
+      </div>
+      <div style={{padding:'10px 16px 0'}}>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="메뉴 이름 검색" style={mInput}/>
+      </div>
+      <div style={{display:'flex', gap:6, overflowX:'auto', padding:'10px 16px'}}>
+        {categories.map(c => (
+          <button key={c.id} onClick={() => setCatId(c.id)} style={mChip(cat && cat.id === c.id)}>
+            {c.name} {(all[c.id] || []).length}
+          </button>
+        ))}
+      </div>
+      <div style={{flex:1, overflow:'auto', margin:'0 16px 16px', background:'#fff', borderRadius:14}}>
+        {items.length === 0 && <div style={{padding:22, textAlign:'center', color:C_MUTED, fontSize:13}}>메뉴가 없어요.</div>}
+        {items.map((it, i) => (
+          <div key={it.id} style={{padding:'12px 14px', borderTop: i ? `1px solid ${C_BORDER}` : 'none'}}>
+            <div style={{fontSize:14, fontWeight:800}}>{it.name}</div>
+            <div style={{fontSize:12, color:C_MUTED, marginTop:3}}>{mItemSub(it) || '금액 없음'}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MToggle({ on, setOn }) {
+  return (
+    <button onClick={() => setOn(!on)} aria-label={on ? '켜짐' : '꺼짐'} style={{
+      width:44, height:26, borderRadius:13, border:'none', padding:3, cursor:'pointer',
+      background: on ? C_BLUE : '#CBD5E1', display:'flex', justifyContent: on ? 'flex-end' : 'flex-start',
+    }}>
+      <span style={{width:20, height:20, borderRadius:'50%', background:'#fff'}}/>
+    </button>
+  );
+}
+function MOpsAdmin({ onBack }) {
+  const [openTime, setOpenTime] = React.useState('10:00');
+  const [closeTime, setCloseTime] = React.useState('20:00');
+  const [interval, setInterval_] = React.useState('30');
+  const [regularOff, setRegularOff] = React.useState(true);
+  const [offDays, setOffDays] = React.useState(['일']);
+  const [closeCut, setCloseCut] = React.useState('end');
+  const [flags, setFlags] = React.useState({ rest:false, done:true, none:true, personal:true, store:true });
+  const [note, setNote] = React.useState('');
+  const times = [];
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      const val = mPad(h) + ':' + mPad(m);
+      const period = h < 12 ? '오전' : '오후';
+      const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+      times.push({ val, label: period + ' ' + h12 + '시' + (m ? m + '분' : '') });
+    }
+  }
+  const intervals = [{ val:'10', label:'10분' }, { val:'15', label:'15분' }, { val:'30', label:'30분' }, { val:'60', label:'1시간' }];
+  const cuts = [
+    { val:'end', label:'영업 종료 시간까지' },
+    { val:'30min', label:'영업 종료 30분 전' },
+    { val:'1hr', label:'영업 종료 1시간 전' },
+    { val:'2hr', label:'영업 종료 2시간 전' },
+  ];
+  const days = ['월', '화', '수', '목', '금', '토', '일'];
+  const openLabel = (times.find(t => t.val === openTime) || {}).label || openTime;
+  const closeLabel = (times.find(t => t.val === closeTime) || {}).label || closeTime;
+  const [oh, om] = openTime.split(':').map(Number);
+  const [ch, cm] = closeTime.split(':').map(Number);
+  const totalMin = (ch * 60 + cm) - (oh * 60 + om);
+  const slots = totalMin > 0 ? Math.floor(totalMin / Number(interval)) : 0;
+  const sel = { height:40, border:`1px solid ${C_BORDER}`, borderRadius:10, padding:'0 10px', fontFamily:'inherit', fontSize:14, background:'#fff', width:'100%' };
+  const flip = (k) => setFlags(prev => ({ ...prev, [k]: !prev[k] }));
+  const row = (label, control) => (
+    <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, padding:'10px 0'}}>
+      <div style={{fontSize:14, fontWeight:700}}>{label}</div>
+      {control}
+    </div>
+  );
+  return (
+    <div style={{flex:1, minHeight:0, display:'flex', flexDirection:'column', background:C_BG}}>
+      <MSetBar title="운영 관리" onBack={onBack}/>
+      <div style={{flex:1, overflow:'auto', padding:'12px 16px 20px'}}>
+        <div style={{background:'#fff', borderRadius:14, padding:'14px 16px', marginBottom:10}}>
+          <div style={{fontSize:15, fontWeight:800}}>운영 시간 설정</div>
+          <div style={{fontSize:12, fontWeight:800, margin:'12px 0 6px'}}>운영시간</div>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 16px 1fr', alignItems:'center', gap:6}}>
+            <select value={openTime} onChange={e => setOpenTime(e.target.value)} style={sel}>
+              {times.map(t => <option key={t.val} value={t.val}>{t.label}</option>)}
+            </select>
+            <span style={{textAlign:'center', color:C_MUTED}}>~</span>
+            <select value={closeTime} onChange={e => setCloseTime(e.target.value)} style={sel}>
+              {times.map(t => <option key={'c' + t.val} value={t.val}>{t.label}</option>)}
+            </select>
+          </div>
+          <div style={{fontSize:12, fontWeight:800, margin:'12px 0 6px'}}>예약 시간 간격</div>
+          <select value={interval} onChange={e => setInterval_(e.target.value)} style={sel}>
+            {intervals.map(t => <option key={t.val} value={t.val}>{t.label}</option>)}
+          </select>
+          {row('정기 휴무일', <MToggle on={regularOff} setOn={setRegularOff}/>)}
+          {regularOff && (
+            <div style={{display:'flex', gap:6}}>
+              {days.map(d => (
+                <button key={d} onClick={() => setOffDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : prev.concat(d))} style={{
+                  width:32, height:32, borderRadius:'50%', cursor:'pointer', fontFamily:'inherit', fontWeight:800,
+                  border: offDays.includes(d) ? `1px solid ${C_BLUE}` : `1px solid ${C_BORDER}`,
+                  background: offDays.includes(d) ? C_BLUE_SOFT : '#fff',
+                  color: offDays.includes(d) ? C_BLUE : C_MUTED,
+                }}>{d}</button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div style={{background:'#fff', borderRadius:14, padding:'14px 16px', marginBottom:10}}>
+          <div style={{fontSize:15, fontWeight:800}}>예약 마감 설정</div>
+          <div style={{fontSize:12, color:C_MUTED, marginTop:4}}>운영 시간이 {closeLabel}이면 그 기준까지 예약할 수 있어요.</div>
+          <select value={closeCut} onChange={e => setCloseCut(e.target.value)} style={{...sel, marginTop:10}}>
+            {cuts.map(t => <option key={t.val} value={t.val}>{t.label}</option>)}
+          </select>
+        </div>
+        <div style={{background:'#fff', borderRadius:14, padding:'4px 16px', marginBottom:10}}>
+          <div style={{fontSize:15, fontWeight:800, paddingTop:12}}>예약 캘린더 설정</div>
+          {row('휴무자 표시', <MToggle on={flags.rest} setOn={() => flip('rest')}/>)}
+          {row('시술 완료 내역 표시', <MToggle on={flags.done} setOn={() => flip('done')}/>)}
+          {row('디자이너 미지정 사용', <MToggle on={flags.none} setOn={() => flip('none')}/>)}
+          <div style={{fontSize:15, fontWeight:800, paddingTop:8}}>매장 캘린더 설정</div>
+          {row('개인 일정 표시', <MToggle on={flags.personal} setOn={() => flip('personal')}/>)}
+          {row('매장 일정 표시', <MToggle on={flags.store} setOn={() => flip('store')}/>)}
+        </div>
+        <div style={{background:'#fff', borderRadius:14, padding:'14px 16px', marginBottom:10}}>
+          <div style={{fontSize:15, fontWeight:800}}>운영 요약</div>
+          <div style={{fontSize:13, marginTop:8, lineHeight:1.7}}>
+            <div>{openLabel} ~ {closeLabel}</div>
+            <div>총 {totalMin > 0 ? Math.floor(totalMin / 60) + '시간' + (totalMin % 60 ? ' ' + (totalMin % 60) + '분' : '') : '-'}</div>
+            <div>예약 간격 {(intervals.find(t => t.val === interval) || {}).label} · 슬롯 {slots}개</div>
+            <div>휴무 {regularOff ? (offDays.length ? offDays.map(d => '매주 ' + d).join(', ') : '지정 없음') : '없음'}</div>
+            <div>마감 {(cuts.find(t => t.val === closeCut) || {}).label}</div>
+          </div>
+        </div>
+        <div style={{display:'flex', gap:8}}>
+          <button onClick={() => {
+            setOpenTime('10:00'); setCloseTime('20:00'); setInterval_('30');
+            setRegularOff(true); setOffDays(['일']); setCloseCut('end');
+            setFlags({ rest:false, done:true, none:true, personal:true, store:true });
+            setNote('처음 값으로 되돌렸어요.');
+          }} style={{...mGhost, flex:1}}>초기화</button>
+          <button onClick={() => setNote('저장했어요. 이미 잡힌 예약 시간은 바뀌지 않아요.')} style={{...mPrimary, flex:1}}>저장하기</button>
+        </div>
+        {note && <div style={{fontSize:12.5, color:C_MUTED, marginTop:10, textAlign:'center'}}>{note}</div>}
+      </div>
+    </div>
+  );
+}
+
+function mWorkDays(hire) {
+  if (!hire || hire === '-') return null;
+  const start = new Date(hire);
+  const now = new Date(2026, 8, 17);
+  const diff = Math.floor((now - start) / 86400000);
+  return diff > 0 ? diff : 0;
+}
+const M_ROLE = { admin:'관리자', designer:'디자이너', intern:'인턴', custom:'커스텀' };
+const M_STATUS = { active:'근무', leave:'휴직', resigned:'해지' };
+function MStaffAdmin({ onBack }) {
+  const [filter, setFilter] = React.useState('all');
+  const [q, setQ] = React.useState('');
+  const [open, setOpen] = React.useState(null);
+  const all = window.STAFF || [];
+  const rows = all.filter(s => {
+    if (filter === 'active' && s.status !== 'active' && s.status !== 'leave') return false;
+    if (filter === 'resigned' && s.status !== 'resigned') return false;
+    if (q && !s.name.includes(q) && !(s.phone || '').includes(q) && !(s.loginId || '').includes(q)) return false;
+    return true;
+  });
+  const days = open ? mWorkDays(open.hireDate) : null;
+  return (
+    <div style={{flex:1, minHeight:0, display:'flex', flexDirection:'column', background:C_BG}}>
+      <MSetBar title="스태프 관리" onBack={onBack}/>
+      <div style={{padding:'10px 16px 0'}}>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="이름, 전화번호, 아이디" style={mInput}/>
+      </div>
+      <div style={{display:'flex', gap:6, padding:'10px 16px', alignItems:'center'}}>
+        {[{id:'all', label:'전체'}, {id:'active', label:'근무중'}, {id:'resigned', label:'해지'}].map(t => (
+          <button key={t.id} onClick={() => setFilter(t.id)} style={mChip(filter === t.id)}>{t.label}</button>
+        ))}
+        <div style={{marginLeft:'auto', fontSize:12, color:C_MUTED, fontWeight:700}}>{rows.length}/{all.length}명</div>
+      </div>
+      <div style={{flex:1, overflow:'auto', padding:'0 16px 16px'}}>
+        {rows.map(s => (
+          <button key={s.id} onClick={() => setOpen(s)} style={{
+            width:'100%', textAlign:'left', background:'#fff', border:'none', borderRadius:14,
+            padding:'12px 14px', marginBottom:8, cursor:'pointer', fontFamily:'inherit',
+            opacity: s.status === 'resigned' ? 0.7 : 1,
+          }}>
+            <div style={{display:'flex', justifyContent:'space-between', gap:8}}>
+              <div style={{fontSize:14, fontWeight:800, color:C_INK}}>
+                {s.name}{s.isOwner ? ' · 원장' : ''}
+              </div>
+              <div style={{fontSize:12, fontWeight:800, color: s.status === 'resigned' ? '#DC2626' : s.status === 'leave' ? C_MUTED : '#059669'}}>
+                {M_STATUS[s.status] || s.status}
+              </div>
+            </div>
+            <div style={{fontSize:12, color:C_MUTED, marginTop:3}}>
+              {s.role} · {s.designerName} · {M_ROLE[s.permissionRole] || '-'}
+            </div>
+            <div style={{fontSize:12, color:C_MUTED, marginTop:2}}>{s.phone} · {s.loginId || '-'}</div>
+          </button>
+        ))}
+      </div>
+      {open && (
+        <MSheet onClose={() => setOpen(null)}>
+          <div style={{fontSize:18, fontWeight:800}}>{open.name}</div>
+          <div style={{fontSize:13, color:C_MUTED, marginTop:4}}>{M_STATUS[open.status]} · {M_ROLE[open.permissionRole] || '-'}</div>
+          {[
+            ['디자이너명', open.designerName],
+            ['직급', open.role],
+            ['아이디', open.loginId || '-'],
+            ['전화번호', open.phone],
+            ['입사일', open.hireDate === '-' ? '-' : open.hireDate + (days != null ? ' (' + days + '일)' : '')],
+            ['퇴사일', open.resignDate || '-'],
+            ['체크인', open.checkin ? '켜짐' : '꺼짐'],
+            ['플로터', open.floater ? '켜짐' : '꺼짐'],
+          ].map(pair => (
+            <div key={pair[0]} style={{display:'flex', justifyContent:'space-between', gap:12, padding:'10px 0', borderBottom:`1px solid ${C_BORDER}`, fontSize:13}}>
+              <span style={{color:C_MUTED, fontWeight:700}}>{pair[0]}</span>
+              <span style={{fontWeight:800, textAlign:'right'}}>{pair[1]}</span>
+            </div>
+          ))}
+        </MSheet>
+      )}
+    </div>
+  );
+}
+
+function MSettings({ onPc }) {
+  const [page, setPage] = React.useState(null);
+  if (page === 'menu') return <MMenuAdmin onBack={() => setPage(null)}/>;
+  if (page === 'ops') return <MOpsAdmin onBack={() => setPage(null)}/>;
+  if (page === 'staff') return <MStaffAdmin onBack={() => setPage(null)}/>;
+  const items = [
+    { id:'menu', title:'메뉴 관리', desc:'시술, 제품, 정액권, 티켓, 중복메뉴, 할인' },
+    { id:'ops', title:'운영 관리', desc:'운영 시간, 예약 마감, 캘린더' },
+    { id:'staff', title:'스태프 관리', desc:'근무, 권한, 입사와 퇴사' },
+  ];
+  return (
+    <div style={{flex:1, minHeight:0, display:'flex', flexDirection:'column', background:C_BG}}>
+      <div style={{padding:'16px 16px 8px', fontSize:18, fontWeight:800}}>설정</div>
+      <div style={{padding:'0 16px'}}>
+        {items.map(it => (
+          <button key={it.id} onClick={() => setPage(it.id)} style={{
+            width:'100%', textAlign:'left', background:'#fff', border:'none', borderRadius:14,
+            padding:'14px 16px', marginBottom:8, cursor:'pointer', fontFamily:'inherit',
+            display:'flex', alignItems:'center', gap:10,
+          }}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:15, fontWeight:800, color:C_INK}}>{it.title}</div>
+              <div style={{fontSize:12, color:C_MUTED, marginTop:3}}>{it.desc}</div>
+            </div>
+            <span style={{color:C_MUTED, fontSize:18}}>›</span>
+          </button>
+        ))}
+      </div>
+      {onPc && (
+        <button onClick={onPc} style={{
+          marginTop:'auto', marginBottom:16, border:'none', background:'transparent', color:C_BLUE,
+          fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:'inherit',
+        }}>PC 화면으로</button>
+      )}
+    </div>
+  );
+}
+
 function C_MobileApp({ onPc }) {
   const [nav, setNav] = React.useState('home');
   const [side, setSide] = React.useState('book');
@@ -1383,7 +1700,7 @@ function C_MobileApp({ onPc }) {
           {nav === 'home' && side === 'sales' && sales === 'month' && <MSales basis={basis} setBasis={setBasis} mode="month"/>}
           {nav === 'home' && side === 'sales' && sales === 'analysis' && <MAnalysis basis={basis} setBasis={setBasis}/>}
           {nav === 'home' && side === 'my' && <MBlank label="마이"/>}
-          {nav === 'home' && side === 'settings' && <MBlank label="설정" onPc={onPc}/>}
+          {nav === 'home' && side === 'settings' && <MSettings onPc={onPc}/>}
           {nav === 'notice' && <MBlank label="공지"/>}
           {nav === 'market' && <MBlank label="마켓"/>}
           {nav === 'edu' && <MBlank label="교육"/>}
