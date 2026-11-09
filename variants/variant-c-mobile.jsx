@@ -885,7 +885,7 @@ function MAnalysis({ basis, setBasis }) {
         </div>
       </div>
 
-      <MHold range={range}/>
+      <MHold/>
 
       <MCard title={topPay ? `${mRo(topPay.name)} 가장 많이 팔렸어요` : '결제수단'}>
         {pays.map(p => (
@@ -962,57 +962,31 @@ function MAnalysis({ basis, setBasis }) {
   );
 }
 
-const M_PP_NAME = { a:'A정액권', b:'B정액권', c:'C정액권', t1:'클리닉 5회', t2:'케어 10회' };
-function MHold({ range }) {
+function MHold() {
   const [tab, setTab] = React.useState('membership');
-  const from = range && range.from ? range.from.replace(/\./g, '-') : '';
-  const to = range && range.to ? range.to.replace(/\./g, '-') : '';
-  const rows = (window.PP_HOLD || []).filter(r => r.kind === tab && (!from || (r.bought >= from && r.bought <= to)));
+  const rows = (window.PP_HOLD || []).filter(r => r.kind === tab);
   const sales = rows.reduce((a, r) => a + r.sales, 0);
   const used = rows.reduce((a, r) => a + r.used, 0);
   const credit = rows.reduce((a, r) => a + (r.credit != null ? r.credit : r.sales), 0);
-  const buyers = new Set(rows.map(r => r.name)).size;
-  const list = rows.slice().sort((a, b) => (b.sales - b.used) - (a.sales - a.used));
   const tiles = [
-    { name:'판매', amount: sales },
-    { name:'소진', amount: used },
     { name:'금액 잔액', amount: sales - used },
     { name:'적립 잔액', amount: credit - used },
+    { name:'판매', amount: sales },
+    { name:'소진', amount: used },
   ];
   return (
-    <MCard title="정액권 잔액" sub="구매일이 이 기간인 고객입니다. 금액 잔액은 판매−소진, 적립 잔액은 적립−소진입니다.">
+    <MCard title="정액권 잔액" sub="전체 보유입니다. 위에서 고른 기간과 상관없이, 지금 남아 있는 잔액입니다.">
       <div style={{display:'flex', gap:6, marginBottom:10}}>
         <button onClick={() => setTab('membership')} style={mChip(tab === 'membership')}>정액권</button>
         <button onClick={() => setTab('ticket')} style={mChip(tab === 'ticket')}>티켓</button>
       </div>
-      <div style={{fontSize:12, color:C_MUTED, fontWeight:700}}>{buyers}명 · {rows.length}건</div>
-      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginTop:8}}>
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8}}>
         {tiles.map(t => (
           <div key={t.name} style={{background:'#F8FAFC', borderRadius:10, padding:'10px 12px'}}>
             <div style={{fontSize:11, color:C_MUTED, fontWeight:700}}>{t.name}</div>
             <div style={{fontSize:15, fontWeight:800, marginTop:2}}>{mWon(t.amount)}원</div>
           </div>
         ))}
-      </div>
-      <div style={{marginTop:12}}>
-        {list.length === 0 && <div style={{padding:'12px 0', color:C_MUTED, fontSize:13}}>이 기간에 구매한 고객이 없어요.</div>}
-        {list.map(r => {
-          const des = (window.ST_DES || window.DESIGNERS || []).find(d => d.id === r.designer);
-          return (
-            <div key={r.name + r.product + r.bought} style={{padding:'10px 0', borderTop:`1px solid ${C_BORDER}`}}>
-              <div style={{display:'flex', justifyContent:'space-between', gap:8}}>
-                <div style={{fontSize:14, fontWeight:800}}>{r.name}</div>
-                <div style={{fontSize:13, fontWeight:800}}>{mWon(r.sales - r.used)}원</div>
-              </div>
-              <div style={{fontSize:12, color:C_MUTED, marginTop:2}}>
-                {M_PP_NAME[r.product] || r.product} · {des ? des.name : ''} · {r.bought.slice(5).replace('-', '.')}
-              </div>
-              <div style={{fontSize:12, color:C_MUTED, marginTop:2}}>
-                판매 {mWon(r.sales)} · 적립 {mWon(r.credit != null ? r.credit : r.sales)} · 소진 {mWon(r.used)} · 적립 잔액 {mWon((r.credit != null ? r.credit : r.sales) - r.used)}
-              </div>
-            </div>
-          );
-        })}
       </div>
     </MCard>
   );
