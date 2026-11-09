@@ -1,4 +1,4 @@
-// 모바일 — 예약현황, 매출내역, 일별·월별 매출, 담당자 대체, 매출 분석
+// 모바일 — 예약/매출 탭. 예약판이 기본이고, 매출에서 내역·일별·월별·분석을 본다.
 const {
   C_BLUE, C_BLUE_SOFT, C_INK, C_MUTED, C_BORDER, C_BG, C_SURFACE,
 } = window;
@@ -168,13 +168,11 @@ function mSchedOff(designerId, iso) {
 }
 function MBoard() {
   const designers = (window.DESIGNERS || []).filter(d => d.id !== 'unassigned');
-  const [picked, setPicked] = React.useState(() => designers.map(d => d.id));
   const [day, setDay] = React.useState(M_BOARD_DAY);
   const [items, setItems] = React.useState(() => (window.RESERVATIONS || []).map(r => ({ ...r, date: r.date || M_BOARD_DAY })));
   const [sheet, setSheet] = React.useState(null);
   const [toast, setToast] = React.useState('');
-  const selected = designers.filter(d => picked.includes(d.id));
-  const dayItems = items.filter(r => (r.date || M_BOARD_DAY) === day && r.status !== 'cancelled' && picked.includes(r.designer));
+  const dayItems = items.filter(r => (r.date || M_BOARD_DAY) === day && r.status !== 'cancelled');
   const isOff = (id) => mSchedOff(id, day) || dayItems.some(r => r.designer === id && r.type === 'block' && r.blockType === 'dayoff');
   const slots = [];
   for (let m = window.DAY_START; m < window.DAY_END; m += window.SLOT_MIN) slots.push(m);
@@ -183,7 +181,6 @@ function MBoard() {
   const week = mWeekOf(day).map(d => ({ ...d, has: !!marked[d.iso] }));
   const head = week[0].iso.slice(0, 7).replace('-', '.') + '.' + week[0].iso.slice(8) + ' – ' + week[6].iso.slice(5).replace('-', '.');
   const holiday = (window.HOLIDAYS || {})[day];
-  const allOn = designers.length > 0 && designers.every(d => picked.includes(d.id));
 
   React.useEffect(() => {
     if (!toast) return;
@@ -207,22 +204,10 @@ function MBoard() {
     if (!free.length) return;
     setSheet({ mode:'pick', start: window.minToTime(min), designer: free[0].id, free: free.map(d => d.id) });
   };
-  const toggleDes = (id) => {
-    setPicked(prev => {
-      const on = prev.includes(id);
-      if (!on) return prev.concat(id);
-      const next = prev.filter(x => x !== id);
-      return next.length ? next : prev;
-    });
-  };
 
   return (
     <div style={{display:'flex', flexDirection:'column', minHeight:0, flex:1}}>
-      <div style={{padding:'12px 16px 8px', background:'#fff'}}>
-        <div style={{fontSize:18, fontWeight:800, letterSpacing:'-0.03em'}}>예약현황</div>
-        <div style={{fontSize:12, color:C_MUTED, marginTop:2}}>빈 칸을 누르면 예약이나 예약불가를 넣을 수 있어요.</div>
-      </div>
-      <div style={{background:'#fff', padding:'0 12px 8px'}}>
+      <div style={{background:'#fff', padding:'8px 12px 8px'}}>
         <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4}}>
           <button onClick={() => setDay(mAddDays(day, -7))} style={mNav}>‹</button>
           <div style={{fontSize:13, fontWeight:800}}>{head}</div>
@@ -249,36 +234,17 @@ function MBoard() {
           })}
         </div>
       </div>
-      <div style={{display:'flex', gap:6, overflowX:'auto', padding:'8px 16px 10px', background:'#fff', borderBottom:`1px solid ${C_BORDER}`}}>
-        <button onClick={() => setPicked(designers.map(d => d.id))} style={mChip(allOn)}>전체</button>
-        {designers.map(d => {
-          const on = picked.includes(d.id);
-          const n = items.filter(r => (r.date || M_BOARD_DAY) === day && r.designer === d.id && !r.type && r.status !== 'cancelled').length;
-          return (
-            <button key={d.id} onClick={() => toggleDes(d.id)} style={{
-              flexShrink:0, border: on ? `1px solid ${C_BLUE}` : `1px solid ${C_BORDER}`,
-              background: on ? C_BLUE_SOFT : '#fff', color: on ? C_BLUE : C_INK,
-              borderRadius:16, padding:'6px 10px', fontSize:12, fontWeight:700, fontFamily:'inherit', cursor:'pointer',
-            }}>
-              <span style={{display:'inline-block', width:6, height:6, borderRadius:'50%', background:d.color, marginRight:5}}/>
-              {d.name}
-              <span style={{marginLeft:4, color: on ? C_BLUE : C_MUTED, fontWeight:600}}>{n}</span>
-            </button>
-          );
-        })}
-      </div>
-      <div style={{flex:1, overflow:'auto', background:'#fff'}}>
+      <div style={{flex:1, overflow:'auto', background:'#fff', borderTop:`1px solid ${C_BORDER}`}}>
         {holiday && <div style={{padding:'8px 16px 0', fontSize:12, fontWeight:800, color:'#B45309'}}>{holiday}</div>}
-        {selected.length === 0 && <div style={{padding:28, textAlign:'center', color:C_MUTED, fontSize:13}}>담당자를 선택해 주세요.</div>}
-        {selected.length > 0 && (
+        {designers.length > 0 && (
           <div style={{
             display:'grid',
-            gridTemplateColumns: '46px repeat(' + selected.length + ', 118px)',
+            gridTemplateColumns: '46px repeat(' + designers.length + ', 118px)',
             gridTemplateRows: '36px repeat(' + slots.length + ', 44px)',
-            minWidth: 46 + selected.length * 118,
+            minWidth: 46 + designers.length * 118,
           }}>
             <div style={{position:'sticky', top:0, left:0, zIndex:4, background:'#fff', borderBottom:`1px solid ${C_BORDER}`, borderRight:`1px solid ${C_BORDER}`}}/>
-            {selected.map(d => (
+            {designers.map(d => (
               <div key={d.id} style={{
                 position:'sticky', top:0, zIndex:2, background:'#fff',
                 borderBottom:`1px solid ${C_BORDER}`, borderRight:`1px solid ${C_BORDER}`,
@@ -298,7 +264,7 @@ function MBoard() {
                 fontSize:11, fontWeight:700, color: min % 60 === 0 ? C_INK : '#94A3B8',
               }}>{window.minToTime(min)}</div>
             ))}
-            {selected.map((d, ci) => {
+            {designers.map((d, ci) => {
               const col = ci + 2;
               if (isOff(d.id)) {
                 return (
@@ -393,7 +359,6 @@ function MBoard() {
           onSave={(row) => {
             if (clash(row.start, row.duration, row.designer)) { setToast('그 시간에는 이미 일정이 있어요.'); return; }
             setItems(list => [...list, { ...row, date: day }]);
-            setPicked(prev => prev.includes(row.designer) ? prev : prev.concat(row.designer));
             setSheet(null);
             setToast(`${row.customer} 예약이 등록됐어요.`);
           }}
@@ -513,11 +478,7 @@ function MLedger() {
   const head = week[0].iso.slice(0, 7).replace('-', '.') + '.' + week[0].iso.slice(8) + ' – ' + week[6].iso.slice(5).replace('-', '.');
   return (
     <div style={{flex:1, overflow:'auto', background:C_BG}}>
-      <div style={{padding:'14px 16px 8px'}}>
-        <div style={{fontSize:18, fontWeight:800, letterSpacing:'-0.03em'}}>매출내역</div>
-        <div style={{fontSize:12, color:C_MUTED, marginTop:2}}>날짜를 고르면 그날 결제만 보여요.</div>
-      </div>
-      <div style={{margin:'0 16px 10px', background:'#fff', borderRadius:14, padding:'10px 8px 8px'}}>
+      <div style={{margin:'12px 16px 10px', background:'#fff', borderRadius:14, padding:'10px 8px 8px'}}>
         <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6}}>
           <button onClick={() => setDay(mAddDays(day, -7))} style={mNav}>‹</button>
           <div style={{fontSize:13, fontWeight:800}}>{head}</div>
@@ -605,9 +566,8 @@ function mBreak(box, basis) {
   ] : [];
   return { pays, kinds, burns };
 }
-function MSales({ basis, setBasis }) {
+function MSales({ basis, setBasis, mode }) {
   const all = window.ST_ROWS || [];
-  const [mode, setMode] = React.useState('day');
   const groups = mode === 'day'
     ? [17, 16, 15, 14, 13, 12, 9, 6, 3].map(day => ({
         key: 'd' + day,
@@ -624,15 +584,8 @@ function MSales({ basis, setBasis }) {
   const max = Math.max(1, ...groups.map(g => mBucket(g.rows, basis).total));
   return (
     <div style={{flex:1, overflow:'auto', background:C_BG}}>
-      <div style={{padding:'14px 16px 8px'}}>
-        <div style={{fontSize:18, fontWeight:800, letterSpacing:'-0.03em'}}>일별 / 월별 매출</div>
-        <div style={{fontSize:12, color:C_MUTED, marginTop:2}}>결산과 같은 정산 기준</div>
-      </div>
+      <div style={{height:12}}/>
       <MBasis basis={basis} setBasis={setBasis}/>
-      <div style={{display:'flex', gap:6, padding:'0 16px 12px'}}>
-        <button onClick={() => setMode('day')} style={mChip(mode === 'day')}>일별 · 10월</button>
-        <button onClick={() => setMode('month')} style={mChip(mode === 'month')}>월별</button>
-      </div>
       <div style={{margin:'0 16px 12px', background:'#fff', borderRadius:14, padding:'14px 16px'}}>
         <div style={{fontSize:12, color:C_MUTED, fontWeight:700}}>{mode === 'day' ? '10월 1일–17일' : '9월–10월'} · {head.n}건</div>
         <div style={{fontSize:26, fontWeight:800, letterSpacing:'-0.04em', marginTop:2}}>{mWon(head.total)}원</div>
@@ -783,9 +736,7 @@ function MAnalysis({ basis, setBasis }) {
 
   return (
     <div style={{flex:1, overflow:'auto', background:'#F8FAFC'}}>
-      <div style={{padding:'14px 16px 8px', display:'flex', alignItems:'center', gap:8}}>
-        <div style={{fontSize:20, fontWeight:800, letterSpacing:'-0.04em', flex:1}}>매출 분석</div>
-      </div>
+      <div style={{height:12}}/>
       <MBasis basis={basis} setBasis={setBasis}/>
       <div style={{padding:'0 16px 10px', position:'relative'}}>
         <button onClick={() => setOpen(v => !v)} style={{
@@ -1027,18 +978,46 @@ function mChip(on) {
   };
 }
 
-const M_TABS = [
-  { id:'book', label:'예약' },
+const M_NAV = [
+  { id:'home', label:'예약/매출', icon:'▦' },
+  { id:'notice', label:'공지', icon:'✎' },
+  { id:'market', label:'마켓', icon:'▣' },
+  { id:'edu', label:'교육', icon:'▷' },
+  { id:'more', label:'더보기', icon:'···' },
+];
+const M_SALES = [
   { id:'ledger', label:'내역' },
-  { id:'sales', label:'매출' },
-  { id:'sub', label:'대체' },
+  { id:'day', label:'일별' },
+  { id:'month', label:'월별' },
   { id:'analysis', label:'분석' },
 ];
 
+function MBlank({ label, onPc }) {
+  return (
+    <div style={{flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:14}}>
+      <div style={{fontSize:15, fontWeight:800, color:'#94A3B8'}}>{label}</div>
+      {onPc && (
+        <button onClick={onPc} style={{
+          border:'none', background:'transparent', color:C_BLUE, fontSize:13, fontWeight:800,
+          cursor:'pointer', fontFamily:'inherit',
+        }}>PC 화면으로</button>
+      )}
+    </div>
+  );
+}
+
 function C_MobileApp({ onPc }) {
-  const [tab, setTab] = React.useState('book');
+  const [nav, setNav] = React.useState('home');
+  const [side, setSide] = React.useState('book');
+  const [sales, setSales] = React.useState('ledger');
   const [basis, setBasis] = React.useState('sale');
   React.useEffect(() => { window.__closeMobile = onPc; }, [onPc]);
+  const seg = (on) => ({
+    flex:1, height:36, border:'none', borderRadius:9, cursor:'pointer', fontFamily:'inherit',
+    background: on ? '#fff' : 'transparent', color: on ? C_INK : C_MUTED,
+    fontSize:14, fontWeight:800,
+    boxShadow: on ? '0 1px 2px rgba(15,23,42,0.08)' : 'none',
+  });
   return (
     <div style={{
       height:'100vh', background:'#E8EDF5', display:'flex', justifyContent:'center',
@@ -1050,36 +1029,55 @@ function C_MobileApp({ onPc }) {
         display:'flex', flexDirection:'column', position:'relative',
         boxShadow:'0 0 0 1px rgba(15,23,42,0.06)',
       }}>
+        {nav === 'home' && (
+          <div style={{flexShrink:0, background:'#fff', borderBottom:`1px solid ${C_BORDER}`}}>
+            <div style={{display:'flex', gap:4, margin:'10px 16px 8px', padding:3, background:'#F1F5F9', borderRadius:12}}>
+              <button onClick={() => setSide('book')} style={seg(side === 'book')}>예약</button>
+              <button onClick={() => setSide('sales')} style={seg(side === 'sales')}>매출</button>
+            </div>
+            {side === 'sales' && (
+              <div style={{display:'flex', padding:'0 8px'}}>
+                {M_SALES.map(s => {
+                  const on = sales === s.id;
+                  return (
+                    <button key={s.id} onClick={() => setSales(s.id)} style={{
+                      flex:1, border:'none', background:'transparent', cursor:'pointer', fontFamily:'inherit',
+                      color: on ? C_BLUE : C_MUTED, fontSize:13, fontWeight:800,
+                      padding:'8px 0 10px', borderBottom: on ? `2px solid ${C_BLUE}` : '2px solid transparent',
+                    }}>{s.label}</button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
         <div style={{flex:1, minHeight:0, display:'flex', flexDirection:'column'}}>
-          {tab === 'book' && <MBoard/>}
-          {tab === 'ledger' && <MLedger/>}
-          {tab === 'sales' && <MSales basis={basis} setBasis={setBasis}/>}
-          {tab === 'sub' && <MSub/>}
-          {tab === 'analysis' && <MAnalysis basis={basis} setBasis={setBasis}/>}
+          {nav === 'home' && side === 'book' && <MBoard/>}
+          {nav === 'home' && side === 'sales' && sales === 'ledger' && <MLedger/>}
+          {nav === 'home' && side === 'sales' && sales === 'day' && <MSales basis={basis} setBasis={setBasis} mode="day"/>}
+          {nav === 'home' && side === 'sales' && sales === 'month' && <MSales basis={basis} setBasis={setBasis} mode="month"/>}
+          {nav === 'home' && side === 'sales' && sales === 'analysis' && <MAnalysis basis={basis} setBasis={setBasis}/>}
+          {nav === 'notice' && <MBlank label="공지"/>}
+          {nav === 'market' && <MBlank label="마켓"/>}
+          {nav === 'edu' && <MBlank label="교육"/>}
+          {nav === 'more' && <MBlank label="더보기" onPc={onPc}/>}
         </div>
         <div style={{
           flexShrink:0, display:'flex', background:'#fff', borderTop:`1px solid ${C_BORDER}`,
-          padding:'6px 4px 10px',
+          padding:'6px 2px 10px',
         }}>
-          {M_TABS.map(t => {
-            const on = tab === t.id;
+          {M_NAV.map(t => {
+            const on = nav === t.id;
             return (
-              <button key={t.id} onClick={() => setTab(t.id)} style={{
+              <button key={t.id} onClick={() => setNav(t.id)} style={{
                 flex:1, border:'none', background:'transparent', cursor:'pointer', fontFamily:'inherit',
                 color: on ? C_BLUE : '#94A3B8', fontSize:11, fontWeight:800, padding:'6px 0',
               }}>
-                <div style={{fontSize:16, lineHeight:1, marginBottom:3}}>{t.id === 'book' ? '▦' : t.id === 'ledger' ? '☰' : t.id === 'sales' ? '₩' : t.id === 'sub' ? '⇄' : '◈'}</div>
+                <div style={{fontSize:15, lineHeight:1, marginBottom:3, letterSpacing: t.id === 'more' ? '0.08em' : 0}}>{t.icon}</div>
                 {t.label}
               </button>
             );
           })}
-          <button onClick={onPc} style={{
-            flex:1, border:'none', background:'transparent', cursor:'pointer', fontFamily:'inherit',
-            color:'#94A3B8', fontSize:11, fontWeight:800, padding:'6px 0',
-          }}>
-            <div style={{fontSize:16, lineHeight:1, marginBottom:3}}>⌂</div>
-            PC
-          </button>
         </div>
       </div>
     </div>
