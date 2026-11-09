@@ -4,7 +4,11 @@
 <meta charset="UTF-8" data-om-id="5194705a:om-meta-1"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" data-om-id="5194705a:om-meta-2"/>
 <title data-om-id="5194705a:om-title-1" data-om-text-id="txt:Booking Redesign.html:143:180">미용실 CRM 예약 화면 리뉴얼</title>
-<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" data-om-id="5194705a:om-link-1"/>
+<link rel="stylesheet" media="print" onload="this.media='all'" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" data-om-id="5194705a:om-link-1"/>
+<script>
+  window.__CRM_MOBILE = /[?&]mobile=1/.test(location.search) || localStorage.getItem('crm-mobile') === '1';
+  if (window.__CRM_MOBILE) document.documentElement.classList.add('crm-mobile');
+</script>
 <style data-om-id="5194705a:om-style-1" data-om-text-id="txt:Booking Redesign.html:369:2277">
   * { box-sizing: border-box; }
   html, body { margin:0; padding:0; height:100%; overflow:hidden; background:#0B1220; }
@@ -53,6 +57,12 @@
     overflow-x: auto; overflow-y: hidden;
   }
   .variant-stage > div { height: 100%; }
+  #boot { display: none; }
+  html.crm-mobile, html.crm-mobile body { background: #F5F7FB; }
+  html.crm-mobile #boot {
+    display: flex; height: 100%; align-items: center; justify-content: center;
+    color: #5C6B84; font-size: 15px; font-weight: 700; letter-spacing: -0.02em;
+  }
 </style>
 </head>
 <template data-om-id="5194705a:om-template-1" id="__bundler_thumbnail" data-bg-color="#F5F7FB">
@@ -99,58 +109,91 @@
   </div>
 </div>
 
-<div data-om-id="5194705a:om-div-3" class="variant-stage" id="stage"></div>
+<div data-om-id="5194705a:om-div-3" class="variant-stage" id="stage"><div id="boot">화면을 준비하고 있어요</div></div>
 
-<script data-om-id="5194705a:om-script-1" src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
-<script data-om-id="5194705a:om-script-2" src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script>
+  (function () {
+    var dev = !window.__CRM_MOBILE;
+    var react = dev ? 'react.development.js' : 'react.production.min.js';
+    var dom = dev ? 'react-dom.development.js' : 'react-dom.production.min.js';
+    document.write('<script src="https://unpkg.com/react@18.3.1/umd/' + react + '" crossorigin="anonymous"><\/script>');
+    document.write('<script src="https://unpkg.com/react-dom@18.3.1/umd/' + dom + '" crossorigin="anonymous"><\/script>');
+  })();
+</script>
 <script data-om-id="5194705a:om-script-3" src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
 
 <script data-om-id="5194705a:om-script-4" type="text/babel" src="variants/shared.jsx?v=7"></script>
-<script data-om-id="5194705a:om-script-5" type="text/babel" src="variants/icons.jsx"></script>
-<script data-om-id="5194705a:om-script-6" type="text/babel" src="variants/variant-a.jsx"></script>
-<script data-om-id="5194705a:om-script-7" type="text/babel" src="variants/variant-b.jsx"></script>
-<script data-om-id="5194705a:om-script-8" type="text/babel" src="variants/variant-c.jsx?v=104"></script>
-<script data-om-id="5194705a:om-script-8b" type="text/babel" src="variants/variant-c-account.jsx?v=2"></script>
-<script data-om-id="5194705a:om-script-8c" type="text/babel" src="variants/variant-c-term-settings.jsx?v=2"></script>
-<script data-om-id="5194705a:om-script-9" type="text/babel" src="variants/variant-c-stats.jsx?v=87"></script>
-<script data-om-id="5194705a:om-script-10" type="text/babel" src="variants/variant-c-closing.jsx?v=103"></script>
+<script data-om-id="5194705a:om-script-5" data-pc-only type="text/babel" src="variants/icons.jsx"></script>
+<script data-om-id="5194705a:om-script-6" data-pc-only type="text/babel" src="variants/variant-a.jsx"></script>
+<script data-om-id="5194705a:om-script-7" data-pc-only type="text/babel" src="variants/variant-b.jsx"></script>
+<script data-om-id="5194705a:om-script-8" data-pc-only type="text/babel" src="variants/variant-c.jsx?v=104"></script>
+<script data-om-id="5194705a:om-script-8b" data-pc-only type="text/babel" src="variants/variant-c-account.jsx?v=2"></script>
+<script data-om-id="5194705a:om-script-8c" data-pc-only type="text/babel" src="variants/variant-c-term-settings.jsx?v=2"></script>
+<script data-om-id="5194705a:om-script-9" data-pc-only type="text/babel" src="variants/variant-c-stats.jsx?v=87"></script>
+<script data-om-id="5194705a:om-script-10" data-pc-only type="text/babel" src="variants/variant-c-closing.jsx?v=103"></script>
 <script data-om-id="5194705a:om-script-10b" type="text/babel" src="variants/variant-c-substitute.jsx?v=10"></script>
 <script data-om-id="5194705a:om-script-10c" type="text/babel" src="variants/variant-c-sales-ledger.jsx?v=4"></script>
-<script data-om-id="5194705a:om-script-10d" type="text/babel" src="variants/variant-c-terminal.jsx?v=1"></script>
-<script data-om-id="5194705a:om-script-11" type="text/babel" src="variants/variant-c-week.jsx?v=87"></script>
-<script data-om-id="5194705a:om-script-12" type="text/babel" src="variants/variant-c-menu.jsx?v=94"></script>
-<script data-om-id="5194705a:om-script-12b" type="text/babel" src="variants/variant-c-checkin.jsx?v=2"></script>
-<script data-om-id="5194705a:om-script-13" type="text/babel" src="variants/variant-c-menu-stubs.jsx?v=87"></script>
-<script data-om-id="5194705a:om-script-14" type="text/babel" src="variants/variant-c-modals.jsx?v=88"></script>
-<script data-om-id="5194705a:om-script-15" type="text/babel" src="variants/variant-c-staff.jsx?v=87"></script>
-<script data-om-id="5194705a:om-script-16" type="text/babel" src="variants/variant-c-ops.jsx?v=87"></script>
-<script data-om-id="5194705a:om-script-17" type="text/babel" src="variants/variant-c-sms.jsx?v=87"></script>
-<script data-om-id="5194705a:om-script-18" type="text/babel" src="variants/variant-c-phone.jsx?v=87"></script>
-<script data-om-id="5194705a:om-script-18b" type="text/babel" src="variants/variant-c-customer-groups.jsx?v=7"></script>
-<script data-om-id="5194705a:om-script-19" type="text/babel" src="variants/variant-c-booking-modal.jsx?v=90"></script>
-<script data-om-id="5194705a:om-script-20" type="text/babel" src="variants/variant-c-side-panel.jsx?v=90"></script>
-<script data-om-id="5194705a:om-script-21" type="text/babel" src="variants/variant-c-booking-views.jsx?v=87"></script>
-<script data-om-id="5194705a:om-script-22" type="text/babel" src="variants/variant-c-sales.jsx?v=99"></script>
-<script data-om-id="5194705a:om-script-23" type="text/babel" src="variants/variant-c-mkt-data.jsx?v=4"></script>
-<script data-om-id="5194705a:om-script-24" type="text/babel" src="variants/variant-c-mkt-composer.jsx?v=5"></script>
-<script data-om-id="5194705a:om-script-25" type="text/babel" src="variants/variant-c-mkt-bulk.jsx?v=5"></script>
-<script data-om-id="5194705a:om-script-26" type="text/babel" src="variants/variant-c-mkt-auto-data.jsx?v=3"></script>
-<script data-om-id="5194705a:om-script-27" type="text/babel" src="variants/variant-c-mkt-auto.jsx?v=3"></script>
-<script data-om-id="5194705a:om-script-28" type="text/babel" src="variants/variant-c-mkt-charge.jsx?v=2"></script>
-<script data-om-id="5194705a:om-script-29" type="text/babel" src="variants/variant-c-mkt-report-data.jsx?v=1"></script>
-<script data-om-id="5194705a:om-script-30" type="text/babel" src="variants/variant-c-mkt-report.jsx?v=4"></script>
-<script data-om-id="5194705a:om-script-31" type="text/babel" src="variants/variant-c-mkt-revisit-data.jsx?v=2"></script>
-<script data-om-id="5194705a:om-script-32" type="text/babel" src="variants/variant-c-mkt-revisit.jsx?v=6"></script>
+<script data-om-id="5194705a:om-script-10d" data-pc-only type="text/babel" src="variants/variant-c-terminal.jsx?v=1"></script>
+<script data-om-id="5194705a:om-script-11" data-pc-only type="text/babel" src="variants/variant-c-week.jsx?v=87"></script>
+<script data-om-id="5194705a:om-script-12" data-pc-only type="text/babel" src="variants/variant-c-menu.jsx?v=94"></script>
+<script data-om-id="5194705a:om-script-12b" data-pc-only type="text/babel" src="variants/variant-c-checkin.jsx?v=2"></script>
+<script data-om-id="5194705a:om-script-13" data-pc-only type="text/babel" src="variants/variant-c-menu-stubs.jsx?v=87"></script>
+<script data-om-id="5194705a:om-script-14" data-pc-only type="text/babel" src="variants/variant-c-modals.jsx?v=88"></script>
+<script data-om-id="5194705a:om-script-15" data-pc-only type="text/babel" src="variants/variant-c-staff.jsx?v=87"></script>
+<script data-om-id="5194705a:om-script-16" data-pc-only type="text/babel" src="variants/variant-c-ops.jsx?v=87"></script>
+<script data-om-id="5194705a:om-script-17" data-pc-only type="text/babel" src="variants/variant-c-sms.jsx?v=87"></script>
+<script data-om-id="5194705a:om-script-18" data-pc-only type="text/babel" src="variants/variant-c-phone.jsx?v=87"></script>
+<script data-om-id="5194705a:om-script-18b" data-pc-only type="text/babel" src="variants/variant-c-customer-groups.jsx?v=7"></script>
+<script data-om-id="5194705a:om-script-19" data-pc-only type="text/babel" src="variants/variant-c-booking-modal.jsx?v=90"></script>
+<script data-om-id="5194705a:om-script-20" data-pc-only type="text/babel" src="variants/variant-c-side-panel.jsx?v=90"></script>
+<script data-om-id="5194705a:om-script-21" data-pc-only type="text/babel" src="variants/variant-c-booking-views.jsx?v=87"></script>
+<script data-om-id="5194705a:om-script-22" data-pc-only type="text/babel" src="variants/variant-c-sales.jsx?v=99"></script>
+<script data-om-id="5194705a:om-script-23" data-pc-only type="text/babel" src="variants/variant-c-mkt-data.jsx?v=4"></script>
+<script data-om-id="5194705a:om-script-24" data-pc-only type="text/babel" src="variants/variant-c-mkt-composer.jsx?v=5"></script>
+<script data-om-id="5194705a:om-script-25" data-pc-only type="text/babel" src="variants/variant-c-mkt-bulk.jsx?v=5"></script>
+<script data-om-id="5194705a:om-script-26" data-pc-only type="text/babel" src="variants/variant-c-mkt-auto-data.jsx?v=3"></script>
+<script data-om-id="5194705a:om-script-27" data-pc-only type="text/babel" src="variants/variant-c-mkt-auto.jsx?v=3"></script>
+<script data-om-id="5194705a:om-script-28" data-pc-only type="text/babel" src="variants/variant-c-mkt-charge.jsx?v=2"></script>
+<script data-om-id="5194705a:om-script-29" data-pc-only type="text/babel" src="variants/variant-c-mkt-report-data.jsx?v=1"></script>
+<script data-om-id="5194705a:om-script-30" data-pc-only type="text/babel" src="variants/variant-c-mkt-report.jsx?v=4"></script>
+<script data-om-id="5194705a:om-script-31" data-pc-only type="text/babel" src="variants/variant-c-mkt-revisit-data.jsx?v=2"></script>
+<script data-om-id="5194705a:om-script-32" data-pc-only type="text/babel" src="variants/variant-c-mkt-revisit.jsx?v=6"></script>
 <script data-om-id="5194705a:om-script-34" type="text/babel" src="variants/variant-c-settle.jsx?v=12"></script>
-<script data-om-id="5194705a:om-script-35" type="text/babel" src="variants/variant-c-customer.jsx?v=5"></script>
-<script data-om-id="5194705a:om-script-36" type="text/babel" src="variants/variant-c-dashboard.jsx?v=1"></script>
+<script data-om-id="5194705a:om-script-35" data-pc-only type="text/babel" src="variants/variant-c-customer.jsx?v=5"></script>
+<script data-om-id="5194705a:om-script-36" data-pc-only type="text/babel" src="variants/variant-c-dashboard.jsx?v=1"></script>
 <script data-om-id="5194705a:om-script-37" type="text/babel" src="variants/variant-c-mobile.jsx?v=6"></script>
+<script>
+  if (window.__CRM_MOBILE) {
+    document.querySelectorAll('script[data-pc-only]').forEach(function (s) { s.remove(); });
+    Object.assign(window, {
+      C_BLUE:'#1E40AF', C_BLUE_SOFT:'#EFF3FC', C_INK:'#0B1425', C_MUTED:'#5C6B84',
+      C_BORDER:'#E5EAF2', C_BG:'#F5F7FB', C_SURFACE:'#FFFFFF',
+      C_STATUS:{
+        confirmed:{ label:'확정', bg:'#1E40AF', text:'#fff' },
+        visited:{ label:'방문', bg:'#059669', text:'#fff' },
+        pending:{ label:'대기', bg:'#FFF4D6', text:'#7A4F00' },
+        noshow:{ label:'노쇼', bg:'#F97066', text:'#fff' },
+        cancelled:{ label:'취소', bg:'#E5EAF2', text:'#5C6B84' },
+      },
+    });
+  }
+</script>
 
 <script data-om-id="5194705a:om-script-33" data-om-text-id="txt:Booking Redesign.html:7534:8989" type="text/babel">
   const VARIANTS = ['a', 'b', 'c'];
   const COMPONENTS = { a: window.VariantA, b: window.VariantB, c: window.VariantC };
 
+  function leaveMobile() {
+    localStorage.setItem('crm-mobile', '0');
+    var url = new URL(location.href);
+    url.searchParams.delete('mobile');
+    location.href = url.pathname + url.search + url.hash;
+  }
+
   function App() {
+    if (window.__CRM_MOBILE && window.C_MobileApp) {
+      return <window.C_MobileApp onPc={leaveMobile}/>;
+    }
     const [current, setCurrent] = React.useState(() => {
       return localStorage.getItem('crm-variant') || 'c';
     });
