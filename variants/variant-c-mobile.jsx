@@ -1049,11 +1049,13 @@ const mCount = {
   fontSize:12, cursor:'pointer', fontFamily:'inherit', padding:'6px 0',
   textDecoration:'underline', textUnderlineOffset:3, flexShrink:0,
 };
-function MPerson({ on }) {
+function MMegaphone({ on }) {
+  const c = on ? C_BLUE : '#64748B';
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle cx="12" cy="8" r="3.2" stroke={on ? C_BLUE : '#64748B'} strokeWidth="1.8"/>
-      <path d="M5.2 19.2c1.3-3.1 3.6-4.6 6.8-4.6s5.5 1.5 6.8 4.6" stroke={on ? C_BLUE : '#64748B'} strokeWidth="1.8" strokeLinecap="round"/>
+      <path d="M4 10.2V14a1.6 1.6 0 0 0 1.6 1.6h1.2L11 19.2V4.8L6.8 8.4H5.6A1.6 1.6 0 0 0 4 10.2z" stroke={c} strokeWidth="1.6" strokeLinejoin="round"/>
+      <path d="M15.2 9.2a3.2 3.2 0 0 1 0 5.6" stroke={c} strokeWidth="1.6" strokeLinecap="round"/>
+      <path d="M17.4 7a6.2 6.2 0 0 1 0 10" stroke={c} strokeWidth="1.6" strokeLinecap="round"/>
     </svg>
   );
 }
@@ -1701,6 +1703,571 @@ function MStaffAdmin({ onBack }) {
   );
 }
 
+const M_CH_CARDS = [
+  { id:'c1', brand:'신한', last:'4047', exp:'08/29', main:true },
+  { id:'c2', brand:'국민', last:'1182', exp:'03/28', main:false },
+];
+const M_CH_AMOUNTS = [10000, 20000, 30000, 50000, 100000, 200000];
+const M_CH_HISTORY = [
+  { id:1, at:'2026-09-03 18:49', kind:'charge', method:'신한 (4890-****-****-4047)', amount:20000, after:20000, status:'성공' },
+  { id:2, at:'2026-08-14 11:02', kind:'auto', method:'신한 (4890-****-****-4047)', amount:40000, after:41230, status:'성공' },
+  { id:3, at:'2026-07-28 09:15', kind:'auto', method:'국민 (9410-****-****-1182)', amount:40000, after:0, status:'실패', reason:'한도 초과' },
+  { id:4, at:'2026-07-02 16:40', kind:'charge', method:'신한 (4890-****-****-4047)', amount:50000, after:52880, status:'성공' },
+  { id:5, at:'2026-06-11 13:27', kind:'refund', method:'신한 (4890-****-****-4047)', amount:-10000, after:18200, status:'환불' },
+];
+const M_CH_STATUS = {
+  '성공': { bg:'#ECFDF5', fg:'#047857' },
+  '실패': { bg:'#FEF2F2', fg:'#DC2626' },
+  '환불': { bg:'#EEF1F6', fg:'#5C6B84' },
+};
+function mHasMkt() {
+  return !!(window.MKT_CUSTOMERS && window.AU_ALIMTALK && window.MKT_UNIT);
+}
+function mDesName(id) {
+  return ((window.DESIGNERS || []).find(d => d.id === id) || {}).name || '미지정';
+}
+function mCatName(id) {
+  return ((window.MENU_CATEGORIES || []).find(c => c.id === id) || {}).name || id;
+}
+function mFullText(channel, isAd, body, tpl) {
+  if (channel === 'alimtalk') return tpl ? tpl.body : '';
+  const store = window.MKT_STORE || { name:'카이키키 부평본점', optout:'080-855-1290' };
+  const head = isAd ? '(광고) ' + store.name + '\n' : '';
+  const foot = isAd ? '\n\n무료수신거부 ' + store.optout : '';
+  return head + (body || '') + foot;
+}
+function mMsgKind(channel, text) {
+  if (channel === 'alimtalk') return { id:'alimtalk', label:'알림톡', price:(window.MKT_UNIT.alimtalk || {}).price || 18 };
+  const bytes = window.mktBytes ? window.mktBytes(text) : text.length * 2;
+  if (bytes > 90) return { id:'lms', label:'장문 문자', price:(window.MKT_UNIT.lms || {}).price || 48 };
+  return { id:'sms', label:'단문 문자', price:(window.MKT_UNIT.sms || {}).price || 20 };
+}
+
+function MBulk({ cash, onCharge, onBack, say }) {
+  const empty = window.MKT_EMPTY_FILTER;
+  const [f, setF] = React.useState(() => ({ ...empty, birth:'this' }));
+  const [seg, setSeg] = React.useState('birth');
+  const [picked, setPicked] = React.useState(() => new Set());
+  const [mode, setMode] = React.useState('all');
+  const [more, setMore] = React.useState(30);
+  const [cond, setCond] = React.useState(false);
+  const [compose, setCompose] = React.useState(false);
+  const [channel, setChannel] = React.useState('sms');
+  const [isAd, setIsAd] = React.useState(true);
+  const [body, setBody] = React.useState((window.MKT_SAMPLES || [])[1] ? window.MKT_SAMPLES[1].body : '');
+  const [tplId, setTplId] = React.useState((window.MKT_ALIMTALK_TPL || []).find(t => t.status === '승인') ? (window.MKT_ALIMTALK_TPL.find(t => t.status === '승인')).id : '');
+  const result = React.useMemo(() => window.mktApplyFilter(window.MKT_CUSTOMERS, f), [f]);
+  const target = mode === 'picked' ? result.filter(c => picked.has(c.id)) : result;
+  const consent = target.filter(c => c.consent);
+  const rows = result.slice(0, more);
+  const tpl = (window.MKT_ALIMTALK_TPL || []).find(t => t.id === tplId);
+  const full = mFullText(channel, isAd, body, tpl);
+  const kind = mMsgKind(channel, full);
+  const cost = consent.length * kind.price;
+  const preview = window.mktRender ? window.mktRender(full, consent[0]) : full;
+  const set = (patch) => { setF(prev => ({ ...prev, ...patch })); setSeg(null); setMore(30); };
+  const toggleIn = (key, v) => set({ [key]: f[key].includes(v) ? f[key].filter(x => x !== v) : f[key].concat(v) });
+  const togglePick = (id) => {
+    setPicked(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+    setMode('picked');
+  };
+  return (
+    <div style={{flex:1, minHeight:0, display:'flex', flexDirection:'column', background:C_BG}}>
+      <MSetBar title="단체발송" onBack={onBack}/>
+      <div style={{flex:1, overflow:'auto', padding:'12px 16px 16px'}}>
+        <div style={{background:'#fff', borderRadius:14, padding:'14px 14px 12px'}}>
+          <div style={{display:'flex', alignItems:'center', gap:10}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:12, color:C_MUTED, fontWeight:700}}>문자 캐쉬 잔액</div>
+              <div style={{fontSize:22, fontWeight:800, marginTop:2}}>{mWon(cash)}<span style={{fontSize:13, color:C_MUTED, fontWeight:700}}>원</span></div>
+            </div>
+            <button onClick={onCharge} style={{...mChip(true), height:34}}>충전</button>
+          </div>
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginTop:12}}>
+            {['alimtalk','sms','lms','mms'].map(k => {
+              const u = window.MKT_UNIT[k];
+              return (
+                <div key={k} style={{background:C_BG, borderRadius:10, padding:'8px 10px'}}>
+                  <div style={{fontSize:11, color:C_MUTED, fontWeight:700}}>{u.label} · {u.price}원</div>
+                  <div style={{fontSize:14, fontWeight:800, marginTop:2}}>{mWon(Math.floor(cash / u.price))}건</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{fontSize:12, fontWeight:800, margin:'14px 0 8px'}}>빠른 타겟</div>
+        <div style={{display:'flex', gap:6, overflowX:'auto', paddingBottom:2}}>
+          {(window.MKT_SEGMENTS || []).map(s => (
+            <button key={s.id} onClick={() => { setF({ ...empty, ...s.patch }); setSeg(s.id); setMore(30); setMode('all'); }} style={mChip(seg === s.id)}>{s.label}</button>
+          ))}
+        </div>
+        <div style={{display:'flex', gap:8, marginTop:12}}>
+          <input value={f.q} onChange={e => set({ q:e.target.value })} placeholder="이름 또는 전화번호" style={{...mInput, flex:1}}/>
+          <button onClick={() => setCond(true)} style={mChip(cond)}>조건</button>
+        </div>
+        <div style={{display:'flex', gap:6, marginTop:10}}>
+          <button onClick={() => setMode('all')} style={mChip(mode === 'all')}>조회된 전체</button>
+          <button onClick={() => setMode('picked')} style={mChip(mode === 'picked')}>선택한 고객 {picked.size ? picked.size : ''}</button>
+        </div>
+        <div style={{fontSize:12, color:C_MUTED, fontWeight:700, margin:'12px 0 8px'}}>
+          {result.length.toLocaleString()}명 조회 · 이번 발송 {consent.length.toLocaleString()}명
+        </div>
+        {rows.map(c => {
+          const on = picked.has(c.id);
+          return (
+            <button key={c.id} onClick={() => togglePick(c.id)} style={{
+              width:'100%', textAlign:'left', background:'#fff', border:'none', borderRadius:12,
+              padding:'12px', marginBottom:8, cursor:'pointer', fontFamily:'inherit',
+              display:'flex', alignItems:'center', gap:10,
+            }}>
+              <span style={{
+                width:18, height:18, borderRadius:5, flexShrink:0,
+                border: on ? 'none' : `1.5px solid ${C_BORDER}`, background: on ? C_BLUE : '#fff',
+                color:'#fff', fontSize:12, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center',
+              }}>{on ? '✓' : ''}</span>
+              <div style={{flex:1, minWidth:0}}>
+                <div style={{fontSize:14, fontWeight:800}}>
+                  {c.name}
+                  <span style={{marginLeft:6, fontSize:11, color:C_BLUE, fontWeight:800}}>{c.grade}</span>
+                  {!c.consent && <span style={{marginLeft:6, fontSize:11, color:'#DC2626', fontWeight:800}}>수신거부</span>}
+                </div>
+                <div style={{fontSize:12, color:C_MUTED, marginTop:3}}>{c.phone} · {c.lastDays ? c.lastDays + '일 전' : '오늘'} · {mDesName(c.designer)}</div>
+              </div>
+            </button>
+          );
+        })}
+        {more < result.length && (
+          <button onClick={() => setMore(n => n + 30)} style={{...mGhost, width:'100%', marginTop:4}}>더 보기</button>
+        )}
+      </div>
+      <div style={{flexShrink:0, background:'#fff', borderTop:`1px solid ${C_BORDER}`, padding:'10px 16px 12px'}}>
+        <div style={{fontSize:12, color:C_MUTED, fontWeight:700, marginBottom:8}}>
+          수신동의 {consent.length.toLocaleString()}명에게 보냅니다. 수신거부 {target.length - consent.length}명은 빠집니다.
+        </div>
+        <button disabled={!consent.length} onClick={() => setCompose(true)} style={{...mPrimary, width:'100%', opacity: consent.length ? 1 : 0.4}}>메시지 작성</button>
+      </div>
+      {cond && (
+        <MSheet onClose={() => setCond(false)}>
+          <div style={{fontSize:16, fontWeight:800}}>상세 조건</div>
+          <div style={{fontSize:12, fontWeight:800, margin:'14px 0 6px'}}>성별</div>
+          <div style={{display:'flex', gap:6}}>
+            {[['all','전체'],['F','여성'],['M','남성']].map(pair => (
+              <button key={pair[0]} onClick={() => set({ gender:pair[0] })} style={mChip(f.gender === pair[0])}>{pair[1]}</button>
+            ))}
+          </div>
+          <div style={{fontSize:12, fontWeight:800, margin:'14px 0 6px'}}>생일</div>
+          <div style={{display:'flex', gap:6}}>
+            {[['all','전체'],['this','이번 달'],['next','다음 달']].map(pair => (
+              <button key={pair[0]} onClick={() => set({ birth:pair[0] })} style={mChip(f.birth === pair[0])}>{pair[1]}</button>
+            ))}
+          </div>
+          <div style={{fontSize:12, fontWeight:800, margin:'14px 0 6px'}}>연령대</div>
+          <div style={{display:'flex', gap:6, flexWrap:'wrap'}}>
+            {(window.MKT_AGE_OPTS || []).map(a => (
+              <button key={a} onClick={() => toggleIn('ages', a)} style={mChip(f.ages.includes(a))}>{a === 60 ? '60대+' : a + '대'}</button>
+            ))}
+          </div>
+          <div style={{fontSize:12, fontWeight:800, margin:'14px 0 6px'}}>고객 등급</div>
+          <div style={{display:'flex', gap:6}}>
+            {(window.MKT_GRADE_OPTS || []).map(g => (
+              <button key={g} onClick={() => toggleIn('grades', g)} style={mChip(f.grades.includes(g))}>{g}</button>
+            ))}
+          </div>
+          <div style={{fontSize:12, fontWeight:800, margin:'14px 0 6px'}}>휴면</div>
+          <div style={{display:'flex', gap:6, flexWrap:'wrap'}}>
+            {(window.MKT_DORMANT_OPTS || []).map(o => (
+              <button key={o.id} onClick={() => set({ dormant:o.id })} style={mChip(f.dormant === o.id)}>{o.label}</button>
+            ))}
+          </div>
+          <div style={{fontSize:12, fontWeight:800, margin:'14px 0 6px'}}>담당자</div>
+          <div style={{display:'flex', gap:6, overflowX:'auto'}}>
+            {(window.MKT_DESIGNERS || []).map(d => (
+              <button key={d.id} onClick={() => toggleIn('designers', d.id)} style={mChip(f.designers.includes(d.id))}>{d.name}</button>
+            ))}
+          </div>
+          <button onClick={() => { setF({ ...empty }); setSeg('all'); setMore(30); setCond(false); }} style={{...mGhost, width:'100%', marginTop:16}}>조건 지우기</button>
+        </MSheet>
+      )}
+      {compose && (
+        <MSheet onClose={() => setCompose(false)}>
+          <div style={{fontSize:16, fontWeight:800}}>메시지 작성</div>
+          <div style={{display:'flex', gap:6, marginTop:12}}>
+            <button onClick={() => setChannel('sms')} style={mChip(channel === 'sms')}>문자</button>
+            <button onClick={() => setChannel('alimtalk')} style={mChip(channel === 'alimtalk')}>알림톡</button>
+          </div>
+          {channel === 'sms' ? (
+            <div>
+              <div style={{display:'flex', gap:6, marginTop:12, overflowX:'auto'}}>
+                {(window.MKT_SAMPLES || []).map(s => (
+                  <button key={s.id} onClick={() => { setBody(s.body); setIsAd(s.id !== 'holiday'); }} style={mChip(body === s.body)}>{s.tag}</button>
+                ))}
+              </div>
+              <button onClick={() => setIsAd(v => !v)} style={{...mChip(isAd), marginTop:10}}>{isAd ? '광고 문구 포함' : '광고 문구 없음'}</button>
+              <textarea value={body} onChange={e => setBody(e.target.value)} style={{...mInput, height:140, padding:'10px 12px', marginTop:10, resize:'none', lineHeight:1.5}}/>
+            </div>
+          ) : (
+            <div style={{display:'flex', flexDirection:'column', gap:8, marginTop:12}}>
+              {(window.MKT_ALIMTALK_TPL || []).map(t => (
+                <button key={t.id} disabled={t.status !== '승인'} onClick={() => setTplId(t.id)} style={{
+                  textAlign:'left', borderRadius:12, padding:'10px 12px', cursor: t.status === '승인' ? 'pointer' : 'not-allowed',
+                  fontFamily:'inherit', border: tplId === t.id ? `1px solid ${C_BLUE}` : `1px solid ${C_BORDER}`,
+                  background: tplId === t.id ? C_BLUE_SOFT : '#fff', opacity: t.status === '승인' ? 1 : 0.45,
+                }}>
+                  <div style={{fontSize:13, fontWeight:800}}>{t.name}</div>
+                  <div style={{fontSize:11, color:C_MUTED, marginTop:2}}>{t.status} · {t.code}</div>
+                </button>
+              ))}
+            </div>
+          )}
+          <div style={{marginTop:12, background:C_BG, borderRadius:12, padding:'10px 12px', fontSize:12.5, lineHeight:1.55, whiteSpace:'pre-wrap'}}>{preview}</div>
+          <div style={{fontSize:12, color:C_MUTED, fontWeight:700, marginTop:8}}>
+            {kind.label} {kind.price}원 × {consent.length.toLocaleString()}명 = {mWon(cost)}원
+            {cost > cash ? ' · 잔액이 부족해요' : ''}
+          </div>
+          <button disabled={!consent.length || (channel === 'sms' && !body.trim()) || cost > cash} onClick={() => {
+            setCompose(false);
+            say('수신동의 ' + consent.length.toLocaleString() + '명에게 ' + kind.label + '을 발송했어요');
+          }} style={{...mPrimary, width:'100%', marginTop:12, opacity: (!consent.length || cost > cash || (channel === 'sms' && !body.trim())) ? 0.4 : 1}}>
+            {cost > cash ? '충전 후 발송' : '발송'}
+          </button>
+          {cost > cash && <button onClick={onCharge} style={{...mGhost, width:'100%', marginTop:8}}>충전관리로</button>}
+        </MSheet>
+      )}
+    </div>
+  );
+}
+
+function MAutoDetail({ item, rules, onSave, onBack, say }) {
+  const [draft, setDraft] = React.useState(item);
+  const [ruleDraft, setRuleDraft] = React.useState(rules);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(item) || (item.rules && JSON.stringify(ruleDraft) !== JSON.stringify(rules));
+  const timing = draft.timing || { kind:'select', options:[] };
+  const mode = draft.timingMode || 'time';
+  const opts = timing.kind === 'reserve' ? (mode === 'date' ? timing.date : timing.time) : (timing.options || []);
+  const val = draft.timingVal || opts[0] || '';
+  return (
+    <div style={{flex:1, minHeight:0, display:'flex', flexDirection:'column', background:C_BG}}>
+      <MSetBar title={draft.name} onBack={onBack}/>
+      <div style={{flex:1, overflow:'auto', padding:'12px 16px 16px'}}>
+        <div style={{background:'#fff', borderRadius:14, padding:'14px'}}>
+          <div style={{display:'flex', alignItems:'center', gap:10}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:15, fontWeight:800}}>{draft.on ? '사용 중' : '꺼짐'}</div>
+              <div style={{fontSize:12, color:C_MUTED, marginTop:3}}>{draft.event}에 자동으로 나갑니다.{draft.recipient === 'designer' ? ' 받는 사람은 담당 디자이너입니다.' : ''}</div>
+            </div>
+            <button onClick={() => setDraft(d => ({ ...d, on:!d.on }))} style={{
+              width:44, height:26, borderRadius:13, border:'none', padding:0, cursor:'pointer', position:'relative',
+              background: draft.on ? '#059669' : '#D5DBE5',
+            }}>
+              <span style={{position:'absolute', top:3, left: draft.on ? 21 : 3, width:20, height:20, borderRadius:'50%', background:'#fff'}}/>
+            </button>
+          </div>
+          {draft.ad && <div style={{marginTop:10, fontSize:12, fontWeight:800, color:'#C2410C'}}>광고성 문자입니다. 수신거부가 붙습니다.</div>}
+        </div>
+        <div style={{fontSize:12, fontWeight:800, margin:'14px 0 8px'}}>발송 시점</div>
+        {timing.kind === 'reserve' && (
+          <div style={{display:'flex', gap:6, marginBottom:8}}>
+            <button onClick={() => setDraft(d => ({ ...d, timingMode:'time', timingVal:timing.time[0] }))} style={mChip(mode === 'time')}>예약 후</button>
+            <button onClick={() => setDraft(d => ({ ...d, timingMode:'date', timingVal:timing.date[0] }))} style={mChip(mode === 'date')}>예약일 전</button>
+          </div>
+        )}
+        {!draft.rules && (
+          <div style={{display:'flex', flexDirection:'column', gap:6}}>
+            {opts.map(o => (
+              <button key={o} onClick={() => setDraft(d => ({ ...d, timingVal:o }))} style={{...mChip(val === o), textAlign:'left'}}>{o}</button>
+            ))}
+          </div>
+        )}
+        {draft.rules && ruleDraft.map(r => (
+          <div key={r.id} style={{background:'#fff', borderRadius:14, padding:'12px', marginBottom:8}}>
+            <div style={{display:'flex', alignItems:'center', gap:8}}>
+              <div style={{flex:1, fontSize:13, fontWeight:800}}>{mCatName(r.cat)} · {r.days}일 후 {r.hour}시</div>
+              <button onClick={() => setRuleDraft(list => list.map(x => x.id === r.id ? { ...x, on:!x.on } : x))} style={mChip(r.on)}>{r.on ? '사용' : '꺼짐'}</button>
+            </div>
+            <textarea value={r.body} onChange={e => setRuleDraft(list => list.map(x => x.id === r.id ? { ...x, body:e.target.value } : x))} style={{...mInput, height:96, marginTop:8, padding:'10px 12px', resize:'none', lineHeight:1.45}}/>
+          </div>
+        ))}
+        {!draft.rules && <div style={{fontSize:12, fontWeight:800, margin:'14px 0 8px'}}>내용</div>}
+        {!draft.rules && (item.id.indexOf('al-') === 0 ? (
+          <div style={{background:'#fff', borderRadius:14, padding:'12px', fontSize:13, lineHeight:1.6, whiteSpace:'pre-wrap'}}>
+            <div style={{fontSize:11, color:C_MUTED, fontWeight:800, marginBottom:6}}>{draft.code} · 승인된 문구라 여기서는 바꿀 수 없어요</div>
+            {draft.body}
+          </div>
+        ) : (
+          <textarea value={draft.body || ''} onChange={e => setDraft(d => ({ ...d, body:e.target.value }))} style={{...mInput, height:160, padding:'10px 12px', resize:'none', lineHeight:1.5}}/>
+        ))}
+      </div>
+      <div style={{flexShrink:0, display:'flex', gap:8, padding:'10px 16px 12px', background:'#fff', borderTop:`1px solid ${C_BORDER}`}}>
+        <button onClick={() => say('내 번호(010-5096-3265)로 테스트 발송했어요')} style={{...mGhost, flex:1}}>테스트 발송</button>
+        <button disabled={!dirty} onClick={() => { onSave(draft, ruleDraft); say("'" + draft.name + "' 설정을 저장했어요"); }} style={{...mPrimary, flex:1, opacity: dirty ? 1 : 0.4}}>저장</button>
+      </div>
+    </div>
+  );
+}
+
+function MAuto({ onBack, say }) {
+  const [tab, setTab] = React.useState('alimtalk');
+  const [al, setAl] = React.useState(() => window.AU_ALIMTALK.map(x => ({ ...x })));
+  const [sms, setSms] = React.useState(() => window.AU_SMS.map(x => ({ ...x })));
+  const [rules, setRules] = React.useState(() => window.AU_AFTER_RULES.map(x => ({ ...x })));
+  const [openId, setOpenId] = React.useState(null);
+  const list = tab === 'alimtalk' ? al : sms;
+  const setList = tab === 'alimtalk' ? setAl : setSms;
+  const item = list.find(x => x.id === openId);
+  if (item) {
+    return (
+      <MAutoDetail
+        key={item.id}
+        item={item}
+        rules={rules}
+        onBack={() => setOpenId(null)}
+        say={say}
+        onSave={(draft, nextRules) => {
+          setList(prev => prev.map(x => x.id === draft.id ? draft : x));
+          if (draft.rules) setRules(nextRules);
+        }}
+      />
+    );
+  }
+  const groups = (window.AU_GROUP_ORDER || []).map(g => ({ g, items: list.filter(x => x.group === g) })).filter(x => x.items.length);
+  const count = (arr) => arr.filter(x => x.on).length + '/' + arr.length;
+  return (
+    <div style={{flex:1, minHeight:0, display:'flex', flexDirection:'column', background:C_BG}}>
+      <MSetBar title="자동발송" onBack={onBack}/>
+      <div style={{display:'flex', gap:8, padding:'12px 16px', background:'#fff'}}>
+        <button onClick={() => setTab('alimtalk')} style={{...mChip(tab === 'alimtalk'), flex:1}}>알림톡 {count(al)}</button>
+        <button onClick={() => setTab('sms')} style={{...mChip(tab === 'sms'), flex:1}}>문자 {count(sms)}</button>
+      </div>
+      <div style={{flex:1, overflow:'auto', padding:'8px 16px 16px'}}>
+        {groups.map(group => (
+          <div key={group.g}>
+            <div style={{fontSize:12, fontWeight:800, color:C_MUTED, margin:'10px 0 6px'}}>{group.g}</div>
+            {group.items.map(it => (
+              <div key={it.id} onClick={() => setOpenId(it.id)} style={{
+                background:'#fff', borderRadius:14, padding:'12px 14px', marginBottom:8,
+                display:'flex', alignItems:'center', gap:10, cursor:'pointer',
+              }}>
+                <div style={{flex:1, minWidth:0}}>
+                  <div style={{fontSize:14, fontWeight:800}}>{it.name}</div>
+                  <div style={{fontSize:12, color:C_MUTED, marginTop:3}}>{it.event}{it.recipient === 'designer' ? ' · 디자이너' : ''}{it.ad ? ' · 광고' : ''}</div>
+                </div>
+                <button onClick={e => { e.stopPropagation(); setList(prev => prev.map(x => x.id === it.id ? { ...x, on:!x.on } : x)); }} style={{
+                  width:44, height:26, borderRadius:13, border:'none', padding:0, cursor:'pointer', position:'relative', flexShrink:0,
+                  background: it.on ? '#059669' : '#D5DBE5',
+                }}>
+                  <span style={{position:'absolute', top:3, left: it.on ? 21 : 3, width:20, height:20, borderRadius:'50%', background:'#fff'}}/>
+                </button>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MCharge({ cash, setCash, onBack, say }) {
+  const [history, setHistory] = React.useState(M_CH_HISTORY);
+  const [auto, setAuto] = React.useState({ on:false, below:20000, amount:40000, card:'c1' });
+  const [saved, setSaved] = React.useState(auto);
+  const [sheet, setSheet] = React.useState(null);
+  const [filter, setFilter] = React.useState('all');
+  const [amount, setAmount] = React.useState(20000);
+  const [cardId, setCardId] = React.useState('c1');
+  const dirty = JSON.stringify(auto) !== JSON.stringify(saved);
+  const used30 = 26840;
+  const daysLeft = Math.max(1, Math.round(cash / (used30 / 30)));
+  const low = cash < 20000;
+  const rows = history.filter(h => filter === 'all' || (filter === 'charge' ? h.kind !== 'refund' : h.kind === filter));
+  const pay = (amt, card, kind) => {
+    const next = cash + amt;
+    setCash(next);
+    const now = '2026-09-21 ' + new Date().toTimeString().slice(0, 5);
+    setHistory(h => [{
+      id: Date.now(), at: now, kind, method: card.brand + ' (****-****-****-' + card.last + ')',
+      amount: amt, after: next, status:'성공',
+    }].concat(h));
+  };
+  return (
+    <div style={{flex:1, minHeight:0, display:'flex', flexDirection:'column', background:C_BG}}>
+      <MSetBar title="충전관리" onBack={onBack}/>
+      <div style={{flex:1, overflow:'auto', padding:'12px 16px 20px'}}>
+        <div style={{background:'#fff', borderRadius:14, padding:'16px 14px'}}>
+          <div style={{fontSize:12, color:C_MUTED, fontWeight:700}}>문자 캐쉬 잔액</div>
+          <div style={{fontSize:28, fontWeight:800, marginTop:4}}>{mWon(cash)}<span style={{fontSize:14, color:C_MUTED}}>원</span></div>
+          <div style={{fontSize:12, color: low ? '#B45309' : C_MUTED, marginTop:6, fontWeight:700}}>
+            최근 30일 {mWon(used30)}원 사용 · 약 {daysLeft}일 뒤 소진
+          </div>
+          <div style={{display:'flex', gap:8, marginTop:12}}>
+            <button onClick={() => setSheet('charge')} style={{...mPrimary, flex:1}}>충전하기</button>
+            <button onClick={() => setSheet('cards')} style={{...mGhost, flex:1}}>결제 수단</button>
+          </div>
+          <div style={{fontSize:12, color:C_MUTED, marginTop:8, fontWeight:700}}>자동 충전 {saved.on ? '사용 중' : '미사용'}</div>
+        </div>
+        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginTop:10}}>
+          {['alimtalk','sms','lms','mms'].map(k => {
+            const u = window.MKT_UNIT[k];
+            return (
+              <div key={k} style={{background:'#fff', borderRadius:12, padding:'10px 12px'}}>
+                <div style={{fontSize:12, color:C_MUTED, fontWeight:700}}>{u.label} · {u.price}원</div>
+                <div style={{fontSize:16, fontWeight:800, marginTop:2}}>{mWon(Math.floor(cash / u.price))}건</div>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{background:'#fff', borderRadius:14, padding:'14px', marginTop:10}}>
+          <div style={{display:'flex', alignItems:'center', gap:10}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:14, fontWeight:800}}>잔액 자동 충전</div>
+              <div style={{fontSize:12, color:C_MUTED, marginTop:3, lineHeight:1.45}}>잔액이 설정 금액보다 적어지면 등록된 카드로 충전돼요.</div>
+            </div>
+            <button onClick={() => setAuto(a => ({ ...a, on:!a.on }))} style={{
+              width:44, height:26, borderRadius:13, border:'none', padding:0, cursor:'pointer', position:'relative', flexShrink:0,
+              background: auto.on ? '#059669' : '#D5DBE5',
+            }}>
+              <span style={{position:'absolute', top:3, left: auto.on ? 21 : 3, width:20, height:20, borderRadius:'50%', background:'#fff'}}/>
+            </button>
+          </div>
+          <div style={{marginTop:12, opacity: auto.on ? 1 : 0.45, pointerEvents: auto.on ? 'auto' : 'none'}}>
+            <div style={{fontSize:12, fontWeight:800, marginBottom:6}}>잔액이 이보다 적으면</div>
+            <div style={{display:'flex', gap:6, flexWrap:'wrap'}}>
+              {[5000, 10000, 20000, 30000, 50000].map(v => (
+                <button key={v} onClick={() => setAuto(a => ({ ...a, below:v }))} style={mChip(auto.below === v)}>{mWon(v)}원</button>
+              ))}
+            </div>
+            <div style={{fontSize:12, fontWeight:800, margin:'12px 0 6px'}}>이만큼 충전</div>
+            <div style={{display:'flex', gap:6, flexWrap:'wrap'}}>
+              {[20000, 30000, 40000, 50000, 100000].map(v => (
+                <button key={v} onClick={() => setAuto(a => ({ ...a, amount:v }))} style={mChip(auto.amount === v)}>{mWon(v)}원</button>
+              ))}
+            </div>
+            <div style={{fontSize:12, fontWeight:800, margin:'12px 0 6px'}}>결제 카드</div>
+            <div style={{display:'flex', gap:6}}>
+              {M_CH_CARDS.map(c => (
+                <button key={c.id} onClick={() => setAuto(a => ({ ...a, card:c.id }))} style={mChip(auto.card === c.id)}>{c.brand} {c.last}</button>
+              ))}
+            </div>
+            <div style={{marginTop:10, fontSize:12, color:C_MUTED, fontWeight:700}}>
+              1회 결제 {mWon(Math.round(auto.amount * 1.1))}원 (충전 {mWon(auto.amount)} + 부가세 {mWon(Math.round(auto.amount * 0.1))})
+            </div>
+          </div>
+          <button disabled={!dirty} onClick={() => {
+            setSaved(auto);
+            if (auto.on && auto.below > cash) {
+              const card = M_CH_CARDS.find(c => c.id === auto.card);
+              pay(auto.amount, card, 'auto');
+              say('자동 충전 설정을 저장하고 1회 결제했어요');
+            } else say(auto.on ? '자동 충전 설정을 저장했어요' : '자동 충전을 껐어요');
+          }} style={{...mPrimary, width:'100%', marginTop:12, opacity: dirty ? 1 : 0.4}}>변경사항 저장</button>
+        </div>
+        <div style={{display:'flex', gap:6, marginTop:14, overflowX:'auto'}}>
+          {[['all','전체'],['charge','충전'],['auto','자동 충전'],['refund','환불']].map(pair => (
+            <button key={pair[0]} onClick={() => setFilter(pair[0])} style={mChip(filter === pair[0])}>{pair[1]}</button>
+          ))}
+        </div>
+        {rows.map(h => {
+          const st = M_CH_STATUS[h.status];
+          const label = h.kind === 'auto' ? '자동 충전' : h.kind === 'refund' ? '환불' : '충전';
+          return (
+            <div key={h.id} style={{background:'#fff', borderRadius:14, padding:'12px 14px', marginTop:8}}>
+              <div style={{display:'flex', alignItems:'center', gap:8}}>
+                <span style={{fontSize:11, fontWeight:800, color:st.fg, background:st.bg, borderRadius:10, padding:'3px 8px'}}>{h.status}</span>
+                <span style={{fontSize:12, color:C_MUTED, fontWeight:700}}>{label}</span>
+                <div style={{flex:1}}/>
+                <span style={{fontSize:14, fontWeight:800, color: h.status === '실패' ? '#B6C0CF' : C_INK, textDecoration: h.status === '실패' ? 'line-through' : 'none'}}>
+                  {h.amount > 0 ? '+' : ''}{mWon(h.amount)}원
+                </span>
+              </div>
+              <div style={{fontSize:12, color:C_MUTED, marginTop:6}}>{h.at.replace(/-/g, '.')} · {h.method}</div>
+              <div style={{fontSize:12, color:C_MUTED, marginTop:2}}>{h.status === '실패' ? (h.reason || '실패') : '충전 후 ' + mWon(h.after) + '원'}</div>
+            </div>
+          );
+        })}
+        {rows.length === 0 && <div style={{padding:'28px 0', textAlign:'center', color:C_MUTED, fontWeight:700}}>내역이 없어요</div>}
+        <div style={{fontSize:12, color:C_MUTED, lineHeight:1.6, marginTop:12}}>
+          결제 금액은 충전 금액에 부가세 10%가 더해집니다. 사용하지 않은 캐쉬는 결제일로부터 7일 이내 전액 환불할 수 있어요.
+        </div>
+      </div>
+      {sheet === 'charge' && (
+        <MSheet onClose={() => setSheet(null)}>
+          <div style={{fontSize:16, fontWeight:800}}>충전하기</div>
+          <div style={{display:'flex', flexWrap:'wrap', gap:6, marginTop:12}}>
+            {M_CH_AMOUNTS.map(v => (
+              <button key={v} onClick={() => setAmount(v)} style={mChip(amount === v)}>{mWon(v)}원</button>
+            ))}
+          </div>
+          <div style={{fontSize:12, fontWeight:800, margin:'14px 0 6px'}}>결제 카드</div>
+          <div style={{display:'flex', gap:6}}>
+            {M_CH_CARDS.map(c => (
+              <button key={c.id} onClick={() => setCardId(c.id)} style={mChip(cardId === c.id)}>{c.brand} {c.last}{c.main ? ' · 대표' : ''}</button>
+            ))}
+          </div>
+          <div style={{fontSize:13, fontWeight:800, marginTop:14}}>결제 {mWon(Math.round(amount * 1.1))}원</div>
+          <button onClick={() => {
+            const card = M_CH_CARDS.find(c => c.id === cardId);
+            pay(amount, card, 'charge');
+            setSheet(null);
+            say(mWon(amount) + '원 충전했어요');
+          }} style={{...mPrimary, width:'100%', marginTop:12}}>결제하고 충전</button>
+        </MSheet>
+      )}
+      {sheet === 'cards' && (
+        <MSheet onClose={() => setSheet(null)}>
+          <div style={{fontSize:16, fontWeight:800}}>결제 수단</div>
+          {M_CH_CARDS.map(c => (
+            <div key={c.id} style={{display:'flex', justifyContent:'space-between', padding:'12px 0', borderBottom:`1px solid ${C_BORDER}`, fontSize:14, fontWeight:800}}>
+              <span>{c.brand} · {c.last}</span>
+              <span style={{color:C_MUTED}}>{c.exp}{c.main ? ' · 대표' : ''}</span>
+            </div>
+          ))}
+        </MSheet>
+      )}
+    </div>
+  );
+}
+
+function MMarketing({ say }) {
+  const [page, setPage] = React.useState(null);
+  const [cash, setCash] = React.useState(() => window.MKT_BALANCE || 17486);
+  if (!mHasMkt()) {
+    return (
+      <div style={{flex:1, display:'flex', alignItems:'center', justifyContent:'center', color:C_MUTED, fontWeight:800}}>마케팅 데이터를 불러오지 못했어요</div>
+    );
+  }
+  if (page === 'bulk') return <MBulk cash={cash} onCharge={() => setPage('charge')} onBack={() => setPage(null)} say={say}/>;
+  if (page === 'auto') return <MAuto onBack={() => setPage(null)} say={say}/>;
+  if (page === 'charge') return <MCharge cash={cash} setCash={setCash} onBack={() => setPage(null)} say={say}/>;
+  const items = [
+    { id:'bulk', title:'단체발송', desc:'고객을 골라 문자와 알림톡을 보냅니다' },
+    { id:'auto', title:'자동발송', desc:'예약, 생일, 정액권 만료를 자동으로 보냅니다' },
+    { id:'charge', title:'충전관리', desc:'문자 캐쉬 잔액, 충전, 자동 충전' },
+  ];
+  return (
+    <div style={{flex:1, minHeight:0, display:'flex', flexDirection:'column', background:C_BG}}>
+      <div style={{padding:'16px 16px 8px', fontSize:18, fontWeight:800}}>마케팅</div>
+      <div style={{padding:'0 16px'}}>
+        {items.map(it => (
+          <button key={it.id} onClick={() => setPage(it.id)} style={{
+            width:'100%', textAlign:'left', background:'#fff', border:'none', borderRadius:14,
+            padding:'14px 16px', marginBottom:8, cursor:'pointer', fontFamily:'inherit',
+            display:'flex', alignItems:'center', gap:10,
+          }}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:15, fontWeight:800, color:C_INK}}>{it.title}</div>
+              <div style={{fontSize:12, color:C_MUTED, marginTop:3}}>{it.desc}</div>
+            </div>
+            <span style={{color:C_MUTED, fontSize:18}}>›</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function MSettings({ onPc }) {
   const [page, setPage] = React.useState(null);
   if (page === 'menu') return <MMenuAdmin onBack={() => setPage(null)}/>;
@@ -1800,8 +2367,8 @@ function C_MobileApp({ onPc }) {
                 )}
               </div>
               <div style={{flex:1}}/>
-              <button onClick={() => pickSide('my')} aria-label="마이" style={{border:'none', background:'transparent', padding:4, cursor:'pointer', display:'flex'}}>
-                <MPerson on={side === 'my'}/>
+              <button onClick={() => pickSide('mkt')} aria-label="마케팅" style={{border:'none', background:'transparent', padding:4, cursor:'pointer', display:'flex'}}>
+                <MMegaphone on={side === 'mkt'}/>
               </button>
               <button onClick={() => pickSide('settings')} aria-label="설정" style={{border:'none', background:'transparent', padding:4, cursor:'pointer', display:'flex'}}>
                 <MGear on={side === 'settings'}/>
@@ -1829,7 +2396,7 @@ function C_MobileApp({ onPc }) {
           {nav === 'home' && side === 'sales' && sales === 'day' && <MSales basis={basis} setBasis={setBasis} mode="day"/>}
           {nav === 'home' && side === 'sales' && sales === 'month' && <MSales basis={basis} setBasis={setBasis} mode="month"/>}
           {nav === 'home' && side === 'sales' && sales === 'analysis' && <MAnalysis basis={basis} setBasis={setBasis}/>}
-          {nav === 'home' && side === 'my' && <MBlank label="마이"/>}
+          {nav === 'home' && side === 'mkt' && <MMarketing say={(msg) => setToast(msg)}/>}
           {nav === 'home' && side === 'settings' && <MSettings onPc={onPc}/>}
           {nav === 'notice' && <MBlank label="공지"/>}
           {nav === 'market' && <MBlank label="마켓"/>}
